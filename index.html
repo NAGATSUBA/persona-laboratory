@@ -660,9 +660,10 @@
                 frame.removeAttribute('src');
                 frame.srcdoc = app.code;
             } else if (app.file) {
-                frame.srcdoc = '';
+                frame.removeAttribute('srcdoc');
                 frame.src = app.file;
             } else {
+                frame.removeAttribute('src');
                 frame.srcdoc = '<html><body style="font-family:sans-serif;padding:2em;">コンテンツが見つかりません。</body></html>';
             }
             viewerTitle.textContent = app.title;
@@ -671,7 +672,7 @@
 
         function closeApp() {
             viewer.classList.remove('active');
-            setTimeout(() => { frame.srcdoc = ''; frame.removeAttribute('src'); }, 400);
+            setTimeout(() => { frame.removeAttribute('srcdoc'); frame.removeAttribute('src'); }, 400);
         }
 
         function filterApps(query) {
