@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Persona Laboratory Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- アイコン用ライブラリ（バージョン固定: latestタグは将来の破壊的変更リスクがあるため避ける） -->
+    <script src="https://unpkg.com/lucide@1.21.0"></script>
+    <!-- Cropper.js (画像切り取り用) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #050505;
+            color: #f3f4f6;
+            overflow: hidden;
+        }
+        .stylish-brand {
+            font-weight: 600;
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 5%, #ec4899 45%, #1a1a1a 95%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            -webkit-text-stroke: 0.5px #d97706;
+            filter: drop-shadow(0 0 1px rgba(251, 191, 36, 0.3));
+            letter-spacing: 0.03em;
+        }
+        .admin-brand {
+            font-weight: 800;
+            background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));
+        }
+        .project-card { transition: all 0.3s ease; }
+        .project-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.8);
+            border-color: #ec4899;
+        }
+        .add-card { border: 2px dashed #374151; transition: all 0.3s ease; }
+        .add-card:hover { border-color: #ec4899; background-color: rgba(24, 24, 27, 0.8); transform: translateY(-5px); }
+        #app-viewer {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #000000; z-index: 50; display: flex; flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #app-viewer.active { transform: translateY(0); }
+        #app-frame { flex: 1; width: 100%; border: none; background-color: #fff; }
+        #edit-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); z-index: 100; backdrop-filter: blur(8px);
+            justify-content: center; align-items: center;
+        }
+        #edit-modal.active { display: flex; }
+        #cropper-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 200; flex-direction: column;
+        }
+        #cropper-modal.active { display: flex; }
+        .cropper-container-wrapper { flex: 1; overflow: hidden; background: #111; position: relative; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f0f0f; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        #intro-card { background-size: cover; background-position: center; position: relative; }
+        #intro-card.has-image::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7); border-radius: 1rem; z-index: 0;
+        }
+        #intro-card > * { position: relative; z-index: 1; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- ヘッダー -->
+    <header class="bg-black/90 backdrop-blur-md shadow-lg z-10 sticky top-0 border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2 shrink-0">
+                <div id="header-logo-container" class="transition-opacity duration-200">
+                    <div class="bg-gradient-to-br from-gray-800 to-black p-1.5 rounded-lg border border-gray-700">
+                        <i data-lucide="layout-grid" class="text-pink-500 w-5 h-5"></i>
+                    </div>
+                </div>
+                <h1 id="header-title" class="text-lg stylish-brand hidden sm:block">Persona Laboratory Pro</h1>
+            </div>
+            <div class="flex-1 max-w-md mx-4">
+                <div class="relative group">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4 group-focus-within:text-pink-500 transition-colors"></i>
+                    <input type="text" placeholder="アプリを検索..." oninput="filterApps(this.value)"
+                           class="w-full pl-9 pr-4 py-2 text-sm bg-gray-900 border border-gray-800 text-gray-200 rounded-lg focus:bg-black focus:border-pink-500 focus:ring-1 focus:ring-pink-500 focus:outline-none transition-all placeholder-gray-600">
+                </div>
+            </div>
+            <div class="shrink-0">
+                <button id="mode-toggle-btn" onclick="toggleEditMode()"
+                        class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 border border-transparent hover:bg-gray-800 text-gray-400" title="このブラウザだけに保存されるローカル表示カスタマイズです（他の訪問者には影響しません）">
+                    <i data-lucide="pencil" id="mode-icon" class="w-4 h-4"></i>
+                    <span id="mode-text" class="hidden sm:inline">編集モード</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-6">
+        <div class="max-w-7xl mx-auto">
+            <div id="intro-card" class="mb-8 bg-gradient-to-r from-gray-900 to-black rounded-2xl p-6 md:p-10 border border-gray-800 shadow-xl min-h-[160px] flex flex-col justify-center transition-all duration-500 relative overflow-hidden">
+                <div class="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-pink-600 rounded-full opacity-5 blur-3xl"></div>
+                <div class="absolute bottom-0 left-0 -mb-4 -ml-4 w-40 h-40 bg-indigo-900 rounded-full opacity-5 blur-3xl"></div>
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 class="text-3xl font-bold mb-3 flex items-center gap-2">
+                            <span id="intro-title" class="stylish-brand text-4xl">Welcome back</span>
+                        </h2>
+                        <p id="intro-desc" class="text-gray-300 text-sm md:text-base leading-relaxed max-w-2xl drop-shadow-sm font-medium">
+                            作成したアプリケーションのポータルサイトです。カードをクリックして起動してください。<br>
+                            表示をカスタマイズしたい場合は、右上の「編集モード」に切り替えてください（このブラウザのみに保存されます）。
+                        </p>
+                    </div>
+                    <div id="portal-edit-btn-container" class="hidden relative z-20">
+                        <button onclick="openGlobalEdit()" class="bg-black/60 hover:bg-pink-600 text-gray-200 p-2.5 rounded-lg border border-gray-600 backdrop-blur-md transition-all shadow-lg" title="ポータル設定（背景画像など）を変更">
+                            <i data-lucide="settings" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="projects-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 pb-20"></div>
+        </div>
+    </main>
+
+    <footer class="bg-black border-t border-gray-800 py-6 z-10 shrink-0">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-gray-600 text-sm font-medium">&copy; Persona Laboratory</p>
+        </div>
+    </footer>
+
+    <!-- アプリビューワー -->
+    <div id="app-viewer">
+        <div class="bg-black text-white px-4 py-3 flex justify-between items-center shadow-md border-b border-gray-800">
+            <h2 id="viewer-title" class="font-semibold text-lg text-gray-200">App View</h2>
+            <button onclick="closeApp()" class="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 px-4 py-1.5 rounded-full text-sm transition-colors border border-gray-700 text-gray-300">
+                <i data-lucide="x" class="w-4 h-4"></i> 閉じる
+            </button>
+        </div>
+        <iframe id="app-frame" sandbox="allow-scripts allow-modals allow-forms allow-same-origin allow-popups allow-downloads"></iframe>
+    </div>
+
+    <!-- 編集モーダル -->
+    <div id="edit-modal">
+        <div class="bg-[#0a0a0a] w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl border border-gray-800 flex flex-col mx-4 overflow-hidden animate-fade-in">
+            <div class="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-black">
+                <h3 id="modal-header-title" class="text-xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="edit-3" class="w-5 h-5 text-pink-500"></i> アプリ情報の編集
+                </h3>
+                <button onclick="closeEditModal()" class="text-gray-500 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="flex-1 p-6 overflow-y-auto">
+                <div class="grid gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label id="label-title" class="block text-xs font-bold text-gray-500 uppercase mb-1">アプリ名</label>
+                            <input type="text" id="edit-title" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:ring-2 focus:ring-pink-600 focus:border-transparent outline-none transition-all placeholder-gray-600">
+                        </div>
+                        <div>
+                            <label id="label-desc" class="block text-xs font-bold text-gray-500 uppercase mb-1">簡単な説明</label>
+                            <input type="text" id="edit-desc" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 focus:ring-2 focus:ring-pink-600 focus:border-transparent outline-none transition-all placeholder-gray-600">
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
+                        <label id="label-thumbnail" class="block text-xs font-bold text-gray-500 uppercase mb-2 flex justify-between">
+                            画像設定
+                            <span class="text-xs text-gray-500 font-normal normal-case">※ファイルを選択すると切り取り編集ができます</span>
+                        </label>
+                        <div class="flex flex-col gap-3">
+                            <input type="file" id="edit-thumbnail-file" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-600 file:text-white hover:file:bg-pink-700 cursor-pointer" onchange="startCropping(this, 'thumbnail')">
+                            <input type="text" id="edit-thumbnail" placeholder="または画像URL (https://...)" class="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-gray-300 focus:ring-1 focus:ring-pink-500 outline-none text-xs font-mono">
+                            <div id="thumb-preview" class="hidden mt-2">
+                                <p class="text-xs text-gray-500 mb-1">プレビュー:</p>
+                                <img src="" alt="Preview" class="h-24 w-auto rounded border border-gray-700 object-cover">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="logo-input-container" class="hidden p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-2 flex justify-between">
+                            ロゴ画像設定
+                            <span class="text-xs text-gray-500 font-normal normal-case">※ヘッダー左上のアイコン</span>
+                        </label>
+                        <div class="flex flex-col gap-3">
+                            <input type="file" id="edit-logo-file" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-600 file:text-white hover:file:bg-pink-700 cursor-pointer" onchange="startCropping(this, 'logo')">
+                            <input type="text" id="edit-logo" placeholder="または画像URL (https://...)" class="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-gray-300 focus:ring-1 focus:ring-pink-500 outline-none text-xs font-mono">
+                            <div id="logo-preview" class="hidden mt-2">
+                                <p class="text-xs text-gray-500 mb-1">プレビュー:</p>
+                                <img src="" alt="Preview" class="h-10 w-10 rounded object-cover border border-gray-700">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="code-editor-container" class="flex-1 flex flex-col min-h-[350px]">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1 flex justify-between items-center">
+                            HTMLソースコード（上書き・自分のブラウザのみ反映）
+                            <span class="text-xs text-pink-400 font-normal normal-case bg-pink-900/20 px-2 py-0.5 rounded border border-pink-900/30">空のままなら既定のアプリファイルを使用</span>
+                        </label>
+                        <textarea id="edit-code" class="flex-1 w-full bg-[#050505] border border-gray-800 rounded-lg p-4 text-gray-300 font-mono text-sm leading-relaxed focus:ring-2 focus:ring-pink-600 focus:border-transparent outline-none resize-none" spellcheck="false" placeholder="<!DOCTYPE html>..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-800 bg-black flex justify-between items-center">
+                <button id="btn-reset" onclick="resetToDefault()" class="text-red-500 hover:text-red-400 text-sm flex items-center gap-1 px-3 py-2 rounded hover:bg-red-900/10 transition-colors">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> 初期化
+                </button>
+                <div class="flex gap-3">
+                    <button onclick="closeEditModal()" class="px-4 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-sm font-medium">キャンセル</button>
+                    <button onclick="saveEdit()" class="px-6 py-2 rounded-lg bg-pink-700 hover:bg-pink-600 text-white text-sm font-medium shadow-lg shadow-pink-900/20 transition-all hover:scale-105 border border-pink-600">保存して反映</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 画像切り取りモーダル -->
+    <div id="cropper-modal">
+        <div class="w-full h-full flex flex-col">
+            <div class="px-6 py-3 bg-black border-b border-gray-800 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i data-lucide="crop" class="w-5 h-5 text-pink-500"></i> 画像を切り取り・編集
+                </h3>
+                <button onclick="closeCropper()" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="cropper-container-wrapper relative flex-1 bg-[#111] flex items-center justify-center">
+                <img id="cropper-image" src="" alt="Source" style="max-width: 100%; max-height: 80vh; display: block;">
+            </div>
+            <div class="px-6 py-4 bg-black border-t border-gray-800 flex justify-end gap-3">
+                <button onclick="closeCropper()" class="px-4 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-sm font-medium">キャンセル</button>
+                <button onclick="applyCrop()" class="px-6 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium shadow-lg transition-all hover:scale-105">切り取りを適用</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 設定 ---
+        // 注意: このポータルはバックエンドを持たない静的サイトです。「編集モード」はこのブラウザだけに保存される
+        // ローカル表示カスタマイズ機能であり、アクセス制限ではありません（パスワード等は設けていません）。
+        const STORAGE_KEY = 'my_projects_data_v4';
+        const STORAGE_KEY_SETTINGS = 'my_portal_settings_v1';
+
+        // 実アプリ一覧（apps/ 配下の実ファイルを参照。code はローカル上書き用で初期値はnull）
+        const defaultConfigs = [
+            { id: 'surfactant-3d', title: 'Surfactant 3D Explorer', desc: '界面活性剤の3D構造探索・HSP/HLB計算ツール。', icon: 'box', file: 'apps/surfactant-3d-explorer.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'hsp-sim', title: 'HSP シミュレーター', desc: 'ハンセン溶解度パラメーター シミュレーター（Dual Target対応）。', icon: 'flask-conical', file: 'apps/hsp-simulator.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'pddf-bilayer', title: 'PDDF p(r) - 平面二分子膜', desc: '対距離分布関数 p(r)：平面二分子膜モデル（コントラスト有り）。', icon: 'waves', file: 'apps/pddf-bilayer.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'pddf-vesicle', title: 'PDDF p(r) - ベシクル', desc: '対距離分布関数 p(r)：脂質二重膜ベシクルモデル（コントラスト有り）。', icon: 'circle-dot', file: 'apps/pddf-vesicle.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'pddf-micelle', title: 'PDDF p(r) - ミセル', desc: '対距離分布関数 p(r)：コアシェルミセルモデル（コントラスト有り）。', icon: 'atom', file: 'apps/pddf-micelle.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'pddf-rod', title: 'PDDF p(r) - ロッド', desc: '対距離分布関数 p(r)：コアシェルロッドモデル（コントラスト有り）。', icon: 'move-horizontal', file: 'apps/pddf-rod.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'phase-diagram', title: 'Phase Diagram Maker', desc: '相図（フェーズダイアグラム）作成ツール。', icon: 'triangle', file: 'apps/phase-diagram-maker.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'fermipro', title: 'FermiPro', desc: 'フェルミ推定トレーニングツール。', icon: 'calculator', file: 'apps/fermipro.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'marketing-dash', title: 'Marketing & MBA Metrics Dashboard', desc: 'マーケティング・MBA指標分析ダッシュボード。', icon: 'bar-chart-3', file: 'apps/marketing-dashboard.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' },
+            { id: 'graffiti-code', title: 'Graffiti Code', desc: 'グラフィティ風コードアートツール。', icon: 'palette', file: 'apps/graffiti-code.html', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400' }
+        ];
+
+        const defaultPortalSettings = {
+            title: "Persona Laboratory Pro",
+            introTitle: "Welcome back",
+            introDesc: "作成したアプリケーションのポータルサイトです。カードをクリックして起動してください。\n表示をカスタマイズしたい場合は、右上の「編集モード」に切り替えてください（このブラウザのみに保存されます）。",
+            coverImage: "",
+            logoImage: ""
+        };
+
+        let isEditMode = false;
+        let currentProjects = [];
+        let portalSettings = { ...defaultPortalSettings };
+
+        let cropper = null;
+        let currentCropType = null;
+
+        // --- データ管理ロジック ---
+        function initAndLoadData() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            let projects;
+            if (saved) {
+                const savedProjects = JSON.parse(saved);
+                // defaultConfigsを正本としつつ、保存済みの上書き(title/desc/thumbnail/code)を適用
+                projects = defaultConfigs.map(config => {
+                    const ov = savedProjects.find(p => p.id === config.id) || {};
+                    return {
+                        ...config,
+                        title: ov.title || config.title,
+                        desc: ov.desc || config.desc,
+                        thumbnail: ov.thumbnail || '',
+                        code: ov.code || null,
+                        isEdited: !!ov.code
+                    };
+                });
+                // ユーザーが追加したカスタムプロジェクトも保持
+                const customs = savedProjects.filter(p => !defaultConfigs.some(c => c.id === p.id));
+                projects = projects.concat(customs);
+            } else {
+                projects = defaultConfigs.map(config => ({ ...config, thumbnail: '', code: null, isEdited: false }));
+            }
+            return projects;
+        }
+
+        function saveAllProjects(projects) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+                currentProjects = projects;
+            } catch (e) {
+                alert("保存容量の上限に達しました。画像を減らすか、サイズを小さくしてください。");
+                console.error("Storage limit exceeded", e);
+            }
+        }
+
+        function savePortalSettings(settings) {
+            try {
+                localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+                portalSettings = settings;
+                renderPortalHeader();
+            } catch (e) {
+                alert("保存容量の上限に達しました。画像を減らすか、サイズを小さくしてください。");
+                console.error("Storage limit exceeded", e);
+            }
+        }
+
+        function addNewProject() {
+            const newId = 'custom-app-' + Date.now();
+            const defaultCode = '<!DOCTYPE html><html><body style="background:#fff7ed;padding:40px;text-align:center;font-family:serif;"><h1>新規プロジェクト</h1><p>ここに新しいアプリのコードを貼り付けてください。</p></body></html>';
+            const newProject = {
+                id: newId, title: '新規プロジェクト', desc: '新しく追加されたアプリケーションです。編集ボタンから内容を作成してください。',
+                code: defaultCode, thumbnail: '', icon: 'box', color: 'from-gray-800 to-gray-900', textColor: 'text-pink-400', isEdited: true
+            };
+            currentProjects.push(newProject);
+            saveAllProjects(currentProjects);
+            renderUI();
+            setTimeout(() => {
+                const grid = document.getElementById('projects-grid');
+                grid.lastElementChild.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
+
+        function deleteProject(appId, event) {
+            if (event) event.stopPropagation();
+            if (!confirm('このプロジェクトを削除してもよろしいですか？')) return;
+            currentProjects = currentProjects.filter(p => p.id !== appId);
+            saveAllProjects(currentProjects);
+            renderUI();
+        }
+
+        function updateProject(appId, newData) {
+            const index = currentProjects.findIndex(p => p.id === appId);
+            if (index !== -1) {
+                currentProjects[index] = { ...currentProjects[index], ...newData, isEdited: !!(newData.code) || currentProjects[index].isEdited };
+                if (newData.code === '') { currentProjects[index].code = null; currentProjects[index].isEdited = false; }
+                saveAllProjects(currentProjects);
+                renderUI();
+            }
+        }
+
+        function resetProject(appId) {
+            const index = currentProjects.findIndex(p => p.id === appId);
+            if (index === -1) return;
+            const defaultConfig = defaultConfigs.find(c => c.id === appId);
+            if (defaultConfig) {
+                currentProjects[index] = { ...defaultConfig, thumbnail: '', code: null, isEdited: false };
+            } else {
+                currentProjects.splice(index, 1);
+            }
+            saveAllProjects(currentProjects);
+            renderUI();
+        }
+
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function startCropping(input, type) {
+            if (input.files && input.files[0]) {
+                currentCropType = type;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const cropperImage = document.getElementById('cropper-image');
+                    cropperImage.src = e.target.result;
+                    document.getElementById('cropper-modal').classList.add('active');
+                    if (cropper) cropper.destroy();
+                    cropper = new Cropper(cropperImage, { aspectRatio: type === 'logo' ? 1 : NaN, viewMode: 1, autoCropArea: 0.9 });
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+            input.value = '';
+        }
+
+        function closeCropper() {
+            document.getElementById('cropper-modal').classList.remove('active');
+            if (cropper) { cropper.destroy(); cropper = null; }
+        }
+
+        function applyCrop() {
+            if (!cropper) return;
+            const canvas = cropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1200 });
+            const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            if (currentCropType === 'thumbnail') {
+                const thumbPreview = document.getElementById('thumb-preview');
+                thumbPreview.querySelector('img').src = croppedDataUrl;
+                thumbPreview.classList.remove('hidden');
+                document.getElementById('edit-thumbnail').value = croppedDataUrl;
+            } else if (currentCropType === 'logo') {
+                const logoPreview = document.getElementById('logo-preview');
+                logoPreview.querySelector('img').src = croppedDataUrl;
+                logoPreview.classList.remove('hidden');
+                document.getElementById('edit-logo').value = croppedDataUrl;
+            }
+            closeCropper();
+        }
+
+        // --- UIレンダリング ---
+        function renderPortalHeader() {
+            document.title = portalSettings.title;
+            document.getElementById('header-title').textContent = portalSettings.title;
+            const logoContainer = document.getElementById('header-logo-container');
+            if (isEditMode) {
+                logoContainer.onclick = openGlobalEdit;
+                logoContainer.classList.add('cursor-pointer', 'hover:opacity-80');
+                logoContainer.title = "ロゴを変更";
+            } else {
+                logoContainer.onclick = null;
+                logoContainer.classList.remove('cursor-pointer', 'hover:opacity-80');
+                logoContainer.title = "";
+            }
+            if (portalSettings.logoImage && portalSettings.logoImage.trim() !== "") {
+                logoContainer.innerHTML = `<img src="${escapeHtml(portalSettings.logoImage)}" class="w-8 h-8 rounded-lg object-cover" alt="Logo">`;
+            } else {
+                logoContainer.innerHTML = `<div class="bg-gradient-to-br from-gray-800 to-black p-1.5 rounded-lg border border-gray-700"><i data-lucide="layout-grid" class="text-pink-500 w-5 h-5"></i></div>`;
+            }
+            const introCard = document.getElementById('intro-card');
+            const introTitle = document.getElementById('intro-title');
+            const introDesc = document.getElementById('intro-desc');
+            if (isEditMode) {
+                introTitle.textContent = "編集モード (Edit Mode)";
+                introTitle.className = "text-4xl admin-brand flex items-center gap-2 drop-shadow-md";
+                introDesc.textContent = "現在、編集モードが有効です。これはこのブラウザにのみ保存されるローカル表示カスタマイズ機能で、他の訪問者の表示には影響しません。\n右の歯車ボタンでこのエリアの背景やタイトル、ロゴなどを変更できます。下のカードからアプリの追加・編集・削除が可能です。";
+            } else {
+                introTitle.textContent = portalSettings.introTitle;
+                introTitle.className = "text-4xl stylish-brand flex items-center gap-2 drop-shadow-md";
+                introDesc.innerHTML = escapeHtml(portalSettings.introDesc).replace(/\n/g, '<br>');
+            }
+            if (portalSettings.coverImage && portalSettings.coverImage.trim() !== "") {
+                introCard.style.backgroundImage = `url('${portalSettings.coverImage}')`;
+                introCard.classList.add('has-image');
+            } else {
+                introCard.style.backgroundImage = '';
+                introCard.classList.remove('has-image');
+            }
+            lucide.createIcons();
+        }
+
+        function renderUI() {
+            updateHeaderModeUI();
+            if (currentProjects.length === 0) currentProjects = initAndLoadData();
+            renderPortalHeader();
+
+            const grid = document.getElementById('projects-grid');
+            grid.innerHTML = '';
+
+            currentProjects.forEach(app => {
+                const card = document.createElement('div');
+                card.className = 'project-card bg-[#0f0f0f] rounded-lg shadow-lg overflow-hidden border border-gray-800 relative group flex flex-col h-full animate-fade-in';
+                const editedBadge = app.isEdited
+                    ? `<span class="absolute top-2 left-2 bg-pink-900/80 border border-pink-500/30 text-pink-300 text-[10px] px-2 py-0.5 rounded backdrop-blur-sm z-20 font-mono">Customized</span>`
+                    : '';
+                let adminControls = '';
+                if (isEditMode) {
+                    adminControls = `
+                        <div class="absolute top-2 right-2 z-30 flex gap-2 animate-fade-in">
+                            <button onclick="deleteProject('${app.id}', event)" class="bg-black/80 hover:bg-red-600 text-gray-400 hover:text-white p-2 rounded-lg border border-gray-700 transition-all" title="削除">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="openEditModal('${app.id}', event)" class="bg-pink-700 hover:bg-pink-600 text-white p-2 rounded-lg shadow-lg border border-pink-500 transition-all transform hover:scale-110" title="編集">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            </button>
+                        </div>`;
+                }
+                let cardVisual = '';
+                if (app.thumbnail && app.thumbnail.trim() !== "") {
+                    cardVisual = `<img src="${escapeHtml(app.thumbnail)}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="${escapeHtml(app.title)}">`;
+                } else {
+                    cardVisual = `
+                        <div class="absolute -bottom-4 -right-4 w-20 h-20 bg-white opacity-10 rounded-full blur-xl"></div>
+                        <i data-lucide="${app.icon || 'box'}" class="text-white w-10 h-10 opacity-90 drop-shadow-md transform transition-transform group-hover:scale-110 duration-500"></i>`;
+                }
+                card.innerHTML = `
+                    ${editedBadge}
+                    ${adminControls}
+                    <div class="h-28 bg-gradient-to-br ${app.color || 'from-gray-800 to-gray-900'} flex items-center justify-center cursor-pointer relative overflow-hidden" onclick="openApp('${app.id}')">
+                        ${cardVisual}
+                    </div>
+                    <div class="p-4 flex flex-col flex-1 cursor-pointer hover:bg-gray-900/50 transition-colors" onclick="openApp('${app.id}')">
+                        <h3 class="text-base font-bold text-white mb-1.5 flex items-center gap-2">${escapeHtml(app.title)}</h3>
+                        <p class="text-gray-400 text-xs leading-relaxed line-clamp-2 mb-4 flex-1">${escapeHtml(app.desc)}</p>
+                        <div class="flex items-center ${app.textColor || 'text-pink-400'} text-xs font-bold uppercase tracking-wider mt-auto">
+                            Launch App <i data-lucide="arrow-right" class="w-3 h-3 ml-1 group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </div>`;
+                grid.appendChild(card);
+            });
+
+            if (isEditMode) {
+                const addCard = document.createElement('div');
+                addCard.className = 'add-card rounded-lg flex flex-col items-center justify-center cursor-pointer min-h-[200px] text-gray-500 hover:text-pink-500 group animate-fade-in';
+                addCard.onclick = addNewProject;
+                addCard.innerHTML = `
+                    <div class="p-4 rounded-full bg-gray-900 border border-gray-800 group-hover:bg-pink-900/30 group-hover:border-pink-800 mb-3 transition-colors">
+                        <i data-lucide="plus" class="w-8 h-8"></i>
+                    </div>
+                    <span class="font-bold text-sm">新規プロジェクト追加</span>`;
+                grid.appendChild(addCard);
+            }
+            lucide.createIcons();
+            const searchInput = document.querySelector('input[type="text"]');
+            if (searchInput && searchInput.value) filterApps(searchInput.value);
+        }
+
+        // --- モード切替（ローカル表示カスタマイズのON/OFF。アクセス制限ではない） ---
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            renderUI();
+        }
+
+        function updateHeaderModeUI() {
+            const btn = document.getElementById('mode-toggle-btn');
+            const icon = document.getElementById('mode-icon');
+            const text = document.getElementById('mode-text');
+            const portalEditBtn = document.getElementById('portal-edit-btn-container');
+            if (isEditMode) {
+                btn.className = "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all duration-300 bg-pink-700 text-white hover:bg-pink-600 shadow-lg shadow-pink-900/20";
+                icon.setAttribute('data-lucide', 'check');
+                text.textContent = "編集モード中";
+                portalEditBtn.classList.remove('hidden');
+            } else {
+                btn.className = "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 border border-transparent hover:bg-gray-800 text-gray-400";
+                icon.setAttribute('data-lucide', 'pencil');
+                text.textContent = "編集モード";
+                portalEditBtn.classList.add('hidden');
+            }
+        }
+
+        let editingTarget = null;
+        let editingAppId = null;
+        const modal = document.getElementById('edit-modal');
+        const modalTitle = document.getElementById('modal-header-title');
+        const labelTitle = document.getElementById('label-title');
+        const labelDesc = document.getElementById('label-desc');
+        const labelThumb = document.getElementById('label-thumbnail');
+        const titleInput = document.getElementById('edit-title');
+        const descInput = document.getElementById('edit-desc');
+        const codeInput = document.getElementById('edit-code');
+        const thumbnailInput = document.getElementById('edit-thumbnail');
+        const thumbnailFile = document.getElementById('edit-thumbnail-file');
+        const logoInput = document.getElementById('edit-logo');
+        const logoFile = document.getElementById('edit-logo-file');
+        const logoContainer = document.getElementById('logo-input-container');
+        const codeEditorContainer = document.getElementById('code-editor-container');
+        const resetBtn = document.getElementById('btn-reset');
+
+        function openGlobalEdit() {
+            editingTarget = 'PORTAL';
+            editingAppId = null;
+            modalTitle.innerHTML = '<i data-lucide="settings" class="w-5 h-5 text-pink-500"></i> ポータル設定の編集';
+            labelTitle.textContent = "サイトタイトル";
+            titleInput.value = portalSettings.title;
+            labelDesc.textContent = "紹介文 (ウェルカムメッセージ)";
+            descInput.value = portalSettings.introDesc;
+            labelThumb.innerHTML = `ヘッダー背景画像設定`;
+            thumbnailInput.value = portalSettings.coverImage;
+            thumbnailFile.value = "";
+            document.getElementById('thumb-preview').classList.add('hidden');
+            logoContainer.classList.remove('hidden');
+            logoInput.value = portalSettings.logoImage || "";
+            logoFile.value = "";
+            document.getElementById('logo-preview').classList.add('hidden');
+            codeEditorContainer.classList.add('hidden');
+            resetBtn.classList.add('hidden');
+            modal.classList.add('active');
+            lucide.createIcons();
+        }
+
+        function openEditModal(appId, event) {
+            if (event) event.stopPropagation();
+            editingTarget = 'APP';
+            editingAppId = appId;
+            const app = currentProjects.find(p => p.id === appId);
+            if (!app) return;
+            modalTitle.innerHTML = '<i data-lucide="edit-3" class="w-5 h-5 text-pink-500"></i> アプリ情報の編集';
+            labelTitle.textContent = "アプリ名";
+            titleInput.value = app.title;
+            labelDesc.textContent = "簡単な説明";
+            descInput.value = app.desc;
+            labelThumb.innerHTML = `サムネイル画像設定`;
+            thumbnailInput.value = app.thumbnail || '';
+            thumbnailFile.value = "";
+            document.getElementById('thumb-preview').classList.add('hidden');
+            logoContainer.classList.add('hidden');
+            codeEditorContainer.classList.remove('hidden');
+            codeInput.value = app.code || '';
+            resetBtn.classList.remove('hidden');
+            modal.classList.add('active');
+            lucide.createIcons();
+        }
+
+        function closeEditModal() {
+            modal.classList.remove('active');
+            editingTarget = null;
+            editingAppId = null;
+        }
+
+        async function saveEdit() {
+            let finalThumbnail = thumbnailInput.value;
+            if (thumbnailFile.files && thumbnailFile.files[0]) {
+                try { finalThumbnail = await readFileAsDataURL(thumbnailFile.files[0]); }
+                catch(e) { alert("画像の読み込みに失敗しました"); return; }
+            }
+            if (editingTarget === 'PORTAL') {
+                let finalLogo = logoInput.value;
+                if (logoFile.files && logoFile.files[0]) {
+                    try { finalLogo = await readFileAsDataURL(logoFile.files[0]); }
+                    catch(e) { alert("ロゴ画像の読み込みに失敗しました"); return; }
+                }
+                savePortalSettings({ ...portalSettings, title: titleInput.value, introDesc: descInput.value, coverImage: finalThumbnail, logoImage: finalLogo });
+            } else if (editingTarget === 'APP' && editingAppId) {
+                updateProject(editingAppId, { title: titleInput.value, desc: descInput.value, code: codeInput.value, thumbnail: finalThumbnail });
+            }
+            closeEditModal();
+        }
+
+        function resetToDefault() {
+            if (editingTarget === 'APP' && editingAppId) {
+                if (!confirm('内容をリセットしてもよろしいですか？')) return;
+                resetProject(editingAppId);
+                closeEditModal();
+            }
+        }
+
+        // --- ビューワー ---
+        const viewer = document.getElementById('app-viewer');
+        const frame = document.getElementById('app-frame');
+        const viewerTitle = document.getElementById('viewer-title');
+
+        function openApp(appId) {
+            const app = currentProjects.find(p => p.id === appId);
+            if (!app) return;
+            if (app.code) {
+                frame.removeAttribute('src');
+                frame.srcdoc = app.code;
+            } else if (app.file) {
+                frame.srcdoc = '';
+                frame.src = app.file;
+            } else {
+                frame.srcdoc = '<html><body style="font-family:sans-serif;padding:2em;">コンテンツが見つかりません。</body></html>';
+            }
+            viewerTitle.textContent = app.title;
+            viewer.classList.add('active');
+        }
+
+        function closeApp() {
+            viewer.classList.remove('active');
+            setTimeout(() => { frame.srcdoc = ''; frame.removeAttribute('src'); }, 400);
+        }
+
+        function filterApps(query) {
+            const cards = document.querySelectorAll('.project-card');
+            const lowerQuery = query.toLowerCase().trim();
+            const projectCards = Array.from(cards).filter(c => !c.classList.contains('add-card'));
+            projectCards.forEach(card => {
+                const title = card.querySelector('h3').textContent.toLowerCase();
+                const desc = card.querySelector('p').textContent.toLowerCase();
+                card.style.display = (title.includes(lowerQuery) || desc.includes(lowerQuery)) ? '' : 'none';
+            });
+        }
+
+        function escapeHtml(unsafe) {
+            if (!unsafe) return "";
+            return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        window.onload = renderUI;
+    </script>
+</body>
+</html>

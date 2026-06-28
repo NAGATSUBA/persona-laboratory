@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FermiPro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@1.21.0"></script>
+</head>
+<body class="bg-slate-950 text-slate-300 font-sans selection:bg-blue-900 selection:text-white min-h-screen">
+  
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="bg-blue-600 p-2 rounded-lg text-white shadow-lg shadow-blue-900/20">
+          <i data-lucide="calculator" class="w-5 h-5"></i>
+        </div>
+        <h1 class="text-xl font-bold text-white tracking-tight">FermiPro</h1>
+      </div>
+      <!-- Settings Button -->
+      <button id="settings-btn" class="p-2 text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-slate-800" title="設定 (APIキー)">
+        <i data-lucide="settings" class="w-5 h-5"></i>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <!-- Input Section -->
+    <section class="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
+      <div class="mb-6">
+        <label class="block text-sm font-semibold text-slate-300 mb-2">推定の精度モード</label>
+        <div class="flex flex-wrap bg-slate-800 p-1 rounded-xl w-fit border border-slate-700/50" id="mode-buttons">
+          <button data-mode="easy" class="mode-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-white">
+            <i data-lucide="zap" class="w-4 h-4"></i> 簡易
+          </button>
+          <button data-mode="detailed" class="mode-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-700 text-blue-400 shadow-sm">
+            <i data-lucide="target" class="w-4 h-4"></i> 精密
+          </button>
+          <button data-mode="professional" class="mode-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-white">
+            <i data-lucide="briefcase" class="w-4 h-4"></i> プロフェッショナル
+          </button>
+        </div>
+        <p class="text-xs text-slate-500 mt-2 ml-1" id="mode-description">
+          一般的なケース面接レベルの分解を行います（5〜7ステップ）
+        </p>
+      </div>
+
+      <label for="topic-input" class="block text-sm font-semibold text-slate-300 mb-2">推計したいお題を入力してください</label>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <input
+          id="topic-input"
+          type="text"
+          value="日本にある電柱の数"
+          placeholder="例: 日本にあるピアノの数、シカゴのピザ屋の数..."
+          class="flex-1 bg-slate-950 border border-slate-700 text-white text-base rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block w-full p-3.5 transition-shadow placeholder-slate-600"
+        />
+        <button
+          id="estimate-btn"
+          class="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold py-3.5 px-6 rounded-xl transition-colors min-w-[140px]"
+        >
+          <span id="estimate-btn-content" class="flex items-center justify-center gap-2">
+            <i data-lucide="brain" class="w-5 h-5"></i>
+            <span>推定する</span>
+          </span>
+        </button>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <span class="text-sm text-slate-500">試してみる：</span>
+        <button class="topic-preset text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 py-1 px-3 rounded-full transition-colors">日本の美容院の数</button>
+        <button class="topic-preset text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 py-1 px-3 rounded-full transition-colors">世界で1日に飲まれるコーヒーの杯数</button>
+        <button class="topic-preset text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 py-1 px-3 rounded-full transition-colors">東京都内の自動販売機の数</button>
+      </div>
+    </section>
+
+    <!-- Error Message -->
+    <div id="error-container" class="hidden bg-red-900/30 border-l-4 border-red-500 p-4 rounded-r-lg flex items-start gap-3">
+      <i data-lucide="alert-circle" class="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0"></i>
+      <p id="error-message" class="text-red-200 text-sm leading-relaxed"></p>
+    </div>
+
+    <!-- Results Section -->
+    <div id="results-section" class="hidden grid-cols-1 lg:grid-cols-12 gap-8 items-start relative">
+      <!-- Left Column: Logic and Steps -->
+      <div class="lg:col-span-8 space-y-6">
+        <!-- Thought Process -->
+        <div class="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
+          <h2 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
+            <i data-lucide="brain" class="w-5 h-5 text-purple-400"></i>
+            推論のアプローチ
+          </h2>
+          <p id="thought-process" class="text-slate-300 leading-relaxed"></p>
+        </div>
+
+        <!-- Variables (Steps) -->
+        <div class="space-y-4">
+          <h3 class="text-lg font-bold text-white ml-2">計算の要素</h3>
+          <div id="steps-container" class="space-y-4"></div>
+        </div>
+      </div>
+
+      <!-- Right Column: Sticky Result Panel & Graph -->
+      <div class="lg:col-span-4 lg:sticky lg:top-24 space-y-6">
+        <!-- Main Result Card -->
+        <div class="bg-gradient-to-br from-blue-900 to-indigo-950 p-6 rounded-2xl shadow-lg border border-blue-800/50 text-white overflow-hidden relative">
+          <div class="absolute -right-8 -top-8 opacity-10 pointer-events-none">
+            <i data-lucide="calculator" class="w-48 h-48 text-blue-200"></i>
+          </div>
+          <h3 class="text-blue-200 font-medium mb-2 text-sm uppercase tracking-wider">推定結果シミュレーション</h3>
+          <div class="mt-4 relative z-10">
+            <div class="flex items-baseline gap-1 break-all">
+              <span id="main-result" class="text-4xl sm:text-5xl font-bold tracking-tight text-white shadow-sm"></span>
+              <span id="result-unit" class="text-xl text-blue-300 ml-2"></span>
+            </div>
+            <div id="raw-result" class="text-blue-200 text-sm mt-3 font-mono bg-blue-950/50 border border-blue-800/50 inline-block px-3 py-1 rounded-lg"></div>
+          </div>
+          <div class="mt-8 pt-6 border-t border-blue-800/50 relative z-10">
+            <p class="text-sm text-blue-200 flex items-center gap-2">
+              <i data-lucide="brain" class="w-4 h-4 shrink-0"></i>
+              各項目の数値を変更すると、結果がリアルタイムに再計算されます。
+            </p>
+          </div>
+        </div>
+        
+        <!-- 式の可視化プレビュー -->
+        <div id="formula-preview" class="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm text-sm text-slate-400 font-mono break-words leading-relaxed"></div>
+
+        <!-- グラフ: 変数ごとの桁数寄与度 -->
+        <div class="bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-800">
+          <h3 class="text-white font-bold mb-3 flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="w-5 h-5 text-blue-400"></i>
+            変数ごとの桁数寄与度
+          </h3>
+          <p class="text-xs text-slate-400 mb-5 leading-relaxed">
+            フェルミ推定の本質である「オーダー（10の何乗か）」の視覚化です。青い棒は桁数を増やす要素、赤い棒は減らす要素を表しています。
+          </p>
+          <div id="chart-container" class="space-y-3"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 border-t border-slate-800 mt-12 py-6">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 text-center">
+      <p class="text-sm text-slate-500">
+        &copy; <span id="current-year"></span> Persona Laboratory. All rights reserved.
+      </p>
+    </div>
+  </footer>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between p-4 border-b border-slate-800">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <i data-lucide="settings" class="w-5 h-5"></i>
+          API設定
+        </h2>
+        <button id="close-settings-btn" class="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Gemini API キー</label>
+          <input type="password" id="api-key-input" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-slate-600" placeholder="AIzaSy...">
+          <p class="text-xs text-slate-500 mt-3 leading-relaxed">
+            ※ダウンロードしたHTMLをローカルで動かす場合に必要です。<br>
+            ※入力したキーはブラウザのローカルストレージにのみ保存され、外部に送信されることはありません。
+          </p>
+        </div>
+        <div class="pt-4 flex justify-end">
+          <button id="save-settings-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+            保存して閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // アイコンの初期化
+    lucide.createIcons();
+    document.getElementById('current-year').textContent = new Date().getFullYear();
+
+    // 状態管理
+    let currentMode = 'detailed';
+    let topic = '日本にある電柱の数';
+    let estimationData = null;
+    let userValues = {};
+    let isLoading = false;
+
+    // --- 設定モーダルの制御 ---
+    const settingsBtn = document.getElementById('settings-btn');
+    const closeSettingsBtn = document.getElementById('close-settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    const apiKeyInput = document.getElementById('api-key-input');
+
+    // 保存されているキーを読み込む
+    apiKeyInput.value = localStorage.getItem('gemini_api_key') || '';
+
+    settingsBtn.addEventListener('click', () => {
+      settingsModal.classList.remove('hidden');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.add('hidden');
+      apiKeyInput.value = localStorage.getItem('gemini_api_key') || ''; // キャンセル時は元に戻す
+    });
+
+    saveSettingsBtn.addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        localStorage.setItem('gemini_api_key', key);
+      } else {
+        localStorage.removeItem('gemini_api_key');
+      }
+      settingsModal.classList.add('hidden');
+    });
+    // ------------------------
+
+    // モード設定
+    const modeDescriptions = {
+      easy: "少ない要素でざっくりと計算します（3〜4ステップ）",
+      detailed: "一般的なケース面接レベルの分解を行います（5〜7ステップ）",
+      professional: "稼働率や耐用年数など専門的な係数を含めて極めて緻密に計算します（8ステップ以上）"
+    };
+
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        // ボタンのスタイル更新
+        document.querySelectorAll('.mode-btn').forEach(b => {
+          b.className = 'mode-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-white';
+        });
+        const target = e.currentTarget;
+        target.className = 'mode-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-700 text-blue-400 shadow-sm';
+        
+        currentMode = target.dataset.mode;
+        document.getElementById('mode-description').textContent = modeDescriptions[currentMode];
+      });
+    });
+
+    // プリセットお題の設定
+    document.querySelectorAll('.topic-preset').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.getElementById('topic-input').value = e.target.textContent;
+      });
+    });
+
+    // 数値フォーマット関数
+    const formatJapaneseNumber = (num) => {
+      if (num === 0) return "0";
+      if (!num || isNaN(num)) return "-";
+      
+      const decimalPart = num % 1 !== 0 ? num.toString().split('.')[1] : "";
+      const absNum = Math.floor(Math.abs(num));
+      
+      if (absNum < 10000) {
+        return num.toLocaleString() + (decimalPart ? `.${decimalPart}` : "");
+      }
+
+      const units = ["", "万", "億", "兆", "京"];
+      let res = "";
+      let temp = absNum;
+      
+      for (let i = 0; i < units.length; i++) {
+        const part = temp % 10000;
+        if (part > 0) {
+          res = part + units[i] + res;
+        }
+        temp = Math.floor(temp / 10000);
+        if (temp === 0) break;
+      }
+      
+      return (num < 0 ? "-" : "") + res + (decimalPart ? `.${decimalPart.slice(0,2)}` : "");
+    };
+
+    // APIバックオフロジック
+    const fetchWithRetry = async (url, options, retries = 5) => {
+      const delays = [1000, 2000, 4000, 8000, 16000];
+      for (let i = 0; i < retries; i++) {
+        try {
+          const response = await fetch(url, options);
+          if (!response.ok) {
+            // 認証エラー（キーが無効・未設定）の場合は即座にエラーを投げてリトライしない
+            if (response.status === 400 || response.status === 403) {
+              throw new Error(`AuthError: ${response.status}`);
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return await response.json();
+        } catch (error) {
+          if (error.message.includes('AuthError') || i === retries - 1) throw error;
+          console.warn(`Attempt ${i + 1} failed. Retrying in ${delays[i]}ms...`);
+          await new Promise(res => setTimeout(res, delays[i]));
+        }
+      }
+    };
+
+    // 推定実行処理
+    document.getElementById('estimate-btn').addEventListener('click', handleEstimate);
+    document.getElementById('topic-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleEstimate();
+    });
+
+    async function handleEstimate() {
+      const topicInput = document.getElementById('topic-input').value.trim();
+      if (!topicInput || isLoading) return;
+      
+      topic = topicInput;
+      setLoadingState(true);
+      showError(null);
+      document.getElementById('results-section').classList.remove('grid');
+      document.getElementById('results-section').classList.add('hidden');
+
+      const apiKey = ""; // API key is provided by the execution environment
+      const userKey = localStorage.getItem('gemini_api_key') || "";
+      // ユーザー設定のキーがあれば優先、なければ環境注入のキーを使用
+      const effectiveKey = userKey || apiKey;
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${effectiveKey}`;
+
+      let modeInstruction = "";
+      switch(currentMode) {
+        case 'easy': modeInstruction = "小学生でも理解できるような、3〜4ステップ程度の非常にシンプルで大まかな分解にしてください。"; break;
+        case 'detailed': modeInstruction = "一般的なビジネスケース面接で求められるような、5〜7ステップ程度の詳細な分解にしてください。"; break;
+        case 'professional': modeInstruction = "プロのコンサルタントが行うような、8〜10ステップ以上の極めて緻密で専門的な分解にしてください。歩留まり、稼働率、時間帯別変動、耐用年数など、微細な係数も可能な限りステップに組み込んでください。"; break;
+      }
+
+      const prompt = `
+ユーザーから提供されたお題について、フェルミ推定を行ってください。
+お題: ${topic}
+
+【モード指定】
+${modeInstruction}
+
+以下の条件に従って、JSON形式で推定プロセスを分解して出力してください。
+1. 「thought_process」に全体的な考え方を簡潔に記述してください。
+2. 「steps」に計算の各ステップを配列で定義してください。
+3. 各ステップは、掛け算(multiply)または割り算(divide)の連鎖で最終結果が出るように構成してください。（最初のステップは'start'としてください）
+4. 各変数の値(value)は、一般的な常識に基づく妥当な概算値（数値のみ）を入れてください。
+5. 途中で足し算や引き算が必要な複雑なモデルは避け、なるべく「A × B ÷ C」のような一方向の乗算・除算のモデルに落とし込んでください。
+`;
+
+      const schema = {
+        type: "OBJECT",
+        properties: {
+          thought_process: { type: "STRING" },
+          steps: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                id: { type: "STRING" },
+                name: { type: "STRING" },
+                value: { type: "NUMBER" },
+                unit: { type: "STRING" },
+                operator: { type: "STRING" },
+                description: { type: "STRING" }
+              },
+              required: ["id", "name", "value", "unit", "operator", "description"]
+            }
+          },
+          result_unit: { type: "STRING" }
+        },
+        required: ["thought_process", "steps", "result_unit"]
+      };
+
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: "あなたは優秀なコンサルタントであり、論理的なフェルミ推定の専門家です。" }] },
+        generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.2 }
+      };
+
+      try {
+        const result = await fetchWithRetry(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!responseText) throw new Error("APIからのレスポンスが空でした。");
+        
+        estimationData = JSON.parse(responseText);
+        
+        // 初期値をセット
+        userValues = {};
+        estimationData.steps.forEach(step => {
+          userValues[step.id] = step.value;
+        });
+
+        renderInitialUI();
+        updateCalculationsUI();
+
+      } catch (err) {
+        console.error(err);
+        let errorMsg = "推定の生成中にエラーが発生しました。時間をおいて再度お試しください。";
+        // 認証エラー時の専用メッセージ
+        if (err.message.includes("AuthError")) {
+          errorMsg = "APIキーが設定されていないか、無効です。画面右上の「設定（⚙️）」から、有効なGemini APIキーを入力して保存してください。";
+        }
+        showError(errorMsg);
+      } finally {
+        setLoadingState(false);
+      }
+    }
+
+    function setLoadingState(loading) {
+      isLoading = loading;
+      const btn = document.getElementById('estimate-btn');
+      const content = document.getElementById('estimate-btn-content');
+      const input = document.getElementById('topic-input');
+      
+      if (loading) {
+        btn.disabled = true;
+        input.disabled = true;
+        content.innerHTML = '<i data-lucide="refresh-cw" class="w-5 h-5 animate-spin"></i><span>推論中...</span>';
+      } else {
+        btn.disabled = false;
+        input.disabled = false;
+        content.innerHTML = '<i data-lucide="brain" class="w-5 h-5"></i><span>推定する</span>';
+      }
+      lucide.createIcons();
+    }
+
+    function showError(msg) {
+      const container = document.getElementById('error-container');
+      const text = document.getElementById('error-message');
+      if (msg) {
+        text.textContent = msg;
+        container.classList.remove('hidden');
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+
+    // 初回のUI要素構築（ステップの入力欄など）
+    function renderInitialUI() {
+      document.getElementById('results-section').classList.remove('hidden');
+      document.getElementById('results-section').classList.add('grid');
+      
+      document.getElementById('thought-process').textContent = estimationData.thought_process;
+      document.getElementById('result-unit').textContent = estimationData.result_unit;
+
+      const stepsContainer = document.getElementById('steps-container');
+      let stepsHtml = '';
+
+      estimationData.steps.forEach((step, index) => {
+        const iconHtml = index > 0 
+          ? `<div class="absolute -top-5 left-8 bg-slate-900 border border-slate-700 rounded-full p-1 z-10 shadow-sm">
+               <i data-lucide="${step.operator === 'multiply' ? 'x' : 'divide'}" class="w-5 h-5 text-slate-500"></i>
+             </div>` 
+          : '';
+
+        stepsHtml += `
+          <div class="relative">
+            ${iconHtml}
+            <div class="bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-800 hover:border-blue-500/50 transition-colors">
+              <div class="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                <div class="flex-1">
+                  <h4 class="font-semibold text-white flex items-center gap-2">
+                    <span class="bg-slate-800 text-slate-400 text-xs py-0.5 px-2 rounded-full font-mono border border-slate-700">
+                      ${(index + 1).toString().padStart(2, '0')}
+                    </span>
+                    ${step.name}
+                  </h4>
+                  <p class="text-sm text-slate-400 mt-1 flex items-start gap-1">
+                    <i data-lucide="info" class="w-4 h-4 mt-0.5 flex-shrink-0"></i>
+                    ${step.description}
+                  </p>
+                </div>
+                <div class="w-full sm:w-auto flex items-center gap-2 bg-slate-800 p-2 rounded-xl border border-slate-700">
+                  <input
+                    type="number"
+                    data-step-id="${step.id}"
+                    value="${step.value}"
+                    class="step-input w-full sm:w-32 bg-slate-950 border border-slate-700 text-white text-right rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 p-2 font-mono"
+                  />
+                  <span class="text-sm font-medium text-slate-300 whitespace-nowrap min-w-[3rem]">
+                    ${step.unit}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      stepsContainer.innerHTML = stepsHtml;
+      lucide.createIcons();
+
+      // 入力イベントリスナーの設定
+      document.querySelectorAll('.step-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const id = e.target.getAttribute('data-step-id');
+          userValues[id] = parseFloat(e.target.value) || 0;
+          updateCalculationsUI();
+        });
+      });
+    }
+
+    // 計算とグラフUIの更新
+    function updateCalculationsUI() {
+      if (!estimationData) return;
+
+      let currentResult = 0;
+      const stepsData = estimationData.steps.map((step, index) => {
+        const val = userValues[step.id] !== undefined ? userValues[step.id] : step.value;
+        const safeVal = Math.max(val, 1e-10); 
+        let contrib = 0;
+        
+        if (step.operator === 'start' || index === 0) {
+          contrib = Math.log10(safeVal);
+          currentResult = val;
+        } else if (step.operator === 'multiply') {
+          contrib = Math.log10(safeVal);
+          currentResult *= val;
+        } else if (step.operator === 'divide') {
+          contrib = -Math.log10(safeVal);
+          if (val !== 0) currentResult /= val;
+        }
+        
+        return {
+          id: step.id,
+          name: step.name,
+          contrib,
+          isPositive: contrib >= 0,
+          absContrib: Math.abs(contrib)
+        };
+      });
+
+      const finalLog = Math.log10(Math.max(currentResult, 1e-10));
+      const maxAbs = Math.max(...stepsData.map(d => d.absContrib), Math.abs(finalLog), 1);
+
+      // 結果テキストの更新
+      document.getElementById('main-result').textContent = formatJapaneseNumber(currentResult);
+      document.getElementById('raw-result').textContent = `生の値: ${currentResult.toLocaleString()}`;
+
+      // 式プレビューの更新
+      let formulaHtml = '';
+      estimationData.steps.forEach((step, index) => {
+        const val = userValues[step.id] !== undefined ? userValues[step.id] : step.value;
+        if (index > 0) {
+          formulaHtml += `<span class="text-slate-500 mx-2">${step.operator === 'multiply' ? '×' : '÷'}</span>`;
+        }
+        formulaHtml += `<span class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-200" title="${step.name}">${formatJapaneseNumber(val)}</span>`;
+      });
+      formulaHtml += `<span class="text-slate-500 mx-2">=</span><span class="font-bold text-white">${formatJapaneseNumber(currentResult)}</span>`;
+      document.getElementById('formula-preview').innerHTML = formulaHtml;
+
+      // グラフの更新
+      let chartHtml = '';
+      stepsData.forEach(data => {
+        const widthPercent = (data.absContrib / maxAbs) * 100;
+        chartHtml += `
+          <div class="flex items-center text-sm gap-2">
+            <div class="w-2/5 text-right text-slate-300 truncate text-xs" title="${data.name}">${data.name}</div>
+            <div class="flex-1 flex items-center relative h-4">
+              <div class="absolute left-1/2 top-0 bottom-0 w-px bg-slate-700"></div>
+              <div class="flex w-full items-center">
+                <div class="w-1/2 flex justify-end pr-0.5">
+                  ${!data.isPositive ? `<div class="bg-red-500/80 h-3 rounded-l min-w-[2px]" style="width: ${widthPercent}%"></div>` : ''}
+                </div>
+                <div class="w-1/2 flex justify-start pl-0.5">
+                  ${data.isPositive ? `<div class="bg-blue-500/80 h-3 rounded-r min-w-[2px]" style="width: ${widthPercent}%"></div>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="w-10 text-right text-[10px] text-slate-400 font-mono shrink-0">
+              ${data.contrib > 0 ? '+' : ''}${data.contrib.toFixed(1)}
+            </div>
+          </div>
+        `;
+      });
+
+      // 最終結果のバー
+      const finalWidthPercent = (Math.abs(finalLog) / maxAbs) * 100;
+      chartHtml += `
+        <div class="pt-3 mt-3 border-t border-slate-800 flex items-center text-sm gap-2">
+          <div class="w-2/5 text-right text-white font-bold text-xs">総合的な桁数</div>
+          <div class="flex-1 flex items-center relative h-4">
+            <div class="absolute left-1/2 top-0 bottom-0 w-px bg-slate-700"></div>
+            <div class="flex w-full items-center">
+              <div class="w-1/2 flex justify-end pr-0.5">
+                ${finalLog < 0 ? `<div class="bg-indigo-500 h-1.5 rounded-l min-w-[2px]" style="width: ${finalWidthPercent}%"></div>` : ''}
+              </div>
+              <div class="w-1/2 flex justify-start pl-0.5">
+                ${finalLog >= 0 ? `<div class="bg-indigo-500 h-1.5 rounded-r min-w-[2px]" style="width: ${finalWidthPercent}%"></div>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="w-10 text-right text-[10px] text-indigo-400 font-bold font-mono shrink-0">
+            ${finalLog > 0 ? '+' : ''}${finalLog.toFixed(1)}
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('chart-container').innerHTML = chartHtml;
+    }
+  </script>
+</body>
+</html>

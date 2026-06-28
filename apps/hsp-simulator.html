@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HSP ハンセン溶解度パラメーター シミュレーター (Dual Target)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; background: #1a1a1a; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        /* Remove number input arrows */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #facc15; /* Yellow for R0 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        
+        /* Checkbox Style */
+        .custom-checkbox {
+            appearance: none;
+            background-color: #374151;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 1px solid #4b5563;
+            border-radius: 0.15em;
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+        }
+        .custom-checkbox::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em white;
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+        .custom-checkbox:checked::before {
+            transform: scale(1);
+        }
+        .custom-checkbox:checked {
+            background-color: #10b981;
+            border-color: #10b981;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <!-- Tooltip Element -->
+    <div id="tooltip" class="hidden absolute z-[60] bg-gray-900/95 border border-gray-500 rounded-lg p-3 text-white pointer-events-none shadow-2xl backdrop-blur-sm transition-opacity duration-200" style="min-width: 160px; pointer-events: none;">
+        <!-- Content injected by JS -->
+    </div>
+
+    <!-- About Modal -->
+    <div id="about-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 transition-opacity duration-300">
+        <div class="bg-gray-800 border border-gray-600 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-800 rounded-t-lg">
+                <h2 class="text-lg font-bold text-blue-400 flex items-center">
+                    <i class="fa-solid fa-book-open me-2"></i>原理と参考文献
+                </h2>
+                <button id="close-about-btn" class="text-gray-400 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-700">
+                    <i class="fa-solid fa-times text-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Modal Content -->
+            <div class="p-6 text-sm text-gray-300 space-y-6 leading-relaxed overflow-y-auto custom-scrollbar">
+                <!-- 1. HSP Definition -->
+                <section>
+                    <h3 class="text-base font-bold text-white mb-2 border-l-4 border-blue-500 pl-2">1. ハンセン溶解度パラメーター (HSP) とは</h3>
+                    <p class="mb-2">物質の溶解性（凝集エネルギー密度）を以下の3つの相互作用に分解してベクトル表現した指標です。</p>
+                    <ul class="list-none ml-4 space-y-1 text-xs font-mono bg-gray-900/50 p-3 rounded border border-gray-700">
+                        <li class="flex items-center"><span class="w-8 text-blue-400 font-bold">δd</span> : <span class="ml-2">分散項 (Dispersion) - ファンデルワールス力</span></li>
+                        <li class="flex items-center"><span class="w-8 text-green-400 font-bold">δp</span> : <span class="ml-2">分極項 (Polarity) - 双極子間力</span></li>
+                        <li class="flex items-center"><span class="w-8 text-red-400 font-bold">δh</span> : <span class="ml-2">水素結合項 (Hydrogen bonding) - 水素結合力</span></li>
+                    </ul>
+                </section>
+                
+                <!-- 2. Calculation Formula -->
+                <section>
+                    <h3 class="text-base font-bold text-white mb-2 border-l-4 border-green-500 pl-2">2. 溶解性の判定 (HSP距離)</h3>
+                    <p class="mb-2">2つの物質（ターゲット1と溶媒2）の間のHSP距離 $Ra$ は以下の式で計算されます。経験的に分散項 $\delta_d$ の寄与が大きいため、係数4が掛けられています。</p>
+                    <div class="bg-gray-900 p-3 rounded border border-gray-700 font-mono text-center my-2 text-blue-200">
+                        Ra² = 4(δd₁ - δd₂)² + (δp₁ - δp₂)² + (δh₁ - δh₂)²
+                    </div>
+                    <p class="mb-1">判定には、相互作用半径 $R_0$ に対する比率である **RED (Relative Energy Difference)** を用います。</p>
+                    <div class="bg-gray-900 p-2 rounded border border-gray-700 font-mono text-center my-2 text-green-200">
+                        RED = Ra / R₀
+                    </div>
+                    <ul class="list-disc list-inside ml-2 text-xs text-gray-400">
+                        <li><span class="text-green-400 font-bold">RED < 1.0</span> : 良溶媒（溶解・相溶しやすい）</li>
+                        <li><span class="text-yellow-400 font-bold">RED = 1.0</span> : 境界</li>
+                        <li><span class="text-red-400 font-bold">RED > 1.0</span> : 貧溶媒（不溶）</li>
+                    </ul>
+                </section>
+
+                <!-- 3. Mixing Rule -->
+                <section>
+                    <h3 class="text-base font-bold text-white mb-2 border-l-4 border-yellow-500 pl-2">3. 混合溶媒の計算則</h3>
+                    <p>混合溶媒のHSP値は、各成分の体積積分率 $\phi$ に基づく加重平均として計算されます（理想混合を仮定）。</p>
+                    <div class="bg-gray-900 p-3 rounded border border-gray-700 font-mono text-center my-2 text-yellow-200">
+                        δ_mix = Σ (φᵢ × δᵢ)
+                    </div>
+                </section>
+
+                <!-- 4. References -->
+                <section>
+                    <h3 class="text-base font-bold text-white mb-2 border-l-4 border-gray-500 pl-2">4. 参考文献・データ出典</h3>
+                    <div class="bg-gray-900/30 p-3 rounded text-xs text-gray-400">
+                        <p class="mb-2">本シミュレーターの計算ロジックおよび基本データは、以下の文献および一般的なHSP理論に基づいています。</p>
+                        <ul class="list-decimal list-inside space-y-1 ml-1">
+                            <li>Hansen, Charles M. <i>Hansen Solubility Parameters: A User's Handbook, Second Edition</i>. CRC Press, 2007.</li>
+                            <li>Abbott, S., Hansen, C. M., & Yamamoto, H. <i>Hansen Solubility Parameters in Practice (HSPiP)</i>.</li>
+                            <li>Van Krevelen, D. W., & Te Nijenhuis, K. <i>Properties of Polymers</i>. Elsevier, 2009.</li>
+                        </ul>
+                        <p class="mt-3 pt-2 border-t border-gray-700 text-[10px] opacity-70">
+                            ※ 生体（Skin, Nail等）やポリマーのHSP値は文献によるばらつきがあるため、代表的な値を採用しています。<br>
+                            ※ 本ツールは理論計算に基づくシミュレーションであり、実際の溶解現象を完全に保証するものではありません。実験前のスクリーニングとしてご利用ください。
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- UI Overlay -->
+    <div class="absolute top-0 left-0 w-full h-full pointer-events-none flex flex-col md:flex-row">
+        
+        <!-- Sidebar (Controls & List) -->
+        <div class="pointer-events-auto w-full md:w-80 h-[65%] md:h-full bg-gray-900/95 backdrop-blur-md border-r border-gray-700 flex flex-col shadow-2xl transition-transform duration-300" id="sidebar">
+            
+            <!-- Header -->
+            <div class="p-2 border-b border-gray-700 bg-gray-800 flex justify-between items-center flex-shrink-0">
+                <div class="flex items-center">
+                    <h1 class="text-sm font-bold text-gray-200 mr-2"><i class="fa-solid fa-flask me-2 text-blue-400"></i>HSP Dual</h1>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex space-x-1 items-center">
+                    <button id="about-btn" class="text-[10px] bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300 hover:text-white transition-colors" title="原理と参考文献">
+                        <i class="fa-solid fa-circle-info"></i>
+                    </button>
+                    <div class="w-px bg-gray-600 mx-1 h-4"></div>
+                    
+                    <!-- File I/O -->
+                    <button id="export-file-btn" class="text-[10px] bg-gray-700 hover:bg-green-600 px-2 py-1 rounded text-gray-300 hover:text-white transition-colors" title="ファイルに保存 (Export)">
+                        <i class="fa-solid fa-file-export"></i>
+                    </button>
+                    <button id="import-file-btn" class="text-[10px] bg-gray-700 hover:bg-green-600 px-2 py-1 rounded text-gray-300 hover:text-white transition-colors" title="ファイルから読込 (Import)">
+                        <i class="fa-solid fa-file-import"></i>
+                    </button>
+                    
+                    <div class="w-px bg-gray-600 mx-1 h-4"></div>
+
+                    <!-- Local State -->
+                    <button id="calc-mode-btn" class="text-[10px] bg-purple-700 hover:bg-purple-600 px-2 py-1 rounded text-white transition-colors flex items-center" title="スコアからHSPを計算">
+                        <i class="fa-solid fa-calculator"></i>
+                    </button>
+                    <button id="save-btn" class="text-[10px] bg-blue-700 hover:bg-blue-600 px-2 py-1 rounded text-white transition-colors" title="ブラウザに一時保存">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                    </button>
+                    <button id="reset-btn" class="text-[10px] bg-gray-700 hover:bg-red-600 px-2 py-1 rounded text-gray-300 hover:text-white transition-colors" title="初期化">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    
+                    <!-- Toggle Controls Button -->
+                    <button id="toggle-controls-btn" class="text-[10px] bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300 transition-colors ml-1">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Notification Area -->
+            <div id="notification" class="hidden bg-green-600 text-white text-xs text-center py-1 absolute w-full z-50 top-0 left-0 transition-opacity duration-500">
+                設定を保存しました
+            </div>
+
+            <!-- Target Tabs & Controls -->
+            <div id="controls-panel" class="flex-shrink-0 transition-all duration-300 overflow-hidden" style="max-height: 500px;">
+                
+                <!-- Tabs -->
+                <div class="flex text-[10px] font-bold border-b border-gray-700">
+                    <button id="tab-target1" class="flex-1 py-1.5 text-center bg-gray-800 text-blue-400 border-b-2 border-blue-500 transition-colors">Target 1 (青)</button>
+                    <button id="tab-target2" class="flex-1 py-1.5 text-center bg-gray-700 text-gray-400 border-b-2 border-transparent hover:bg-gray-600 transition-colors flex items-center justify-center">
+                        Target 2 (橙) 
+                        <i id="toggle-t2-vis" class="fa-solid fa-eye ml-2 hover:text-white" title="Target 2を表示/非表示"></i>
+                    </button>
+                </div>
+
+                <!-- Input Area (Shared by tabs, logic updates values) -->
+                <div class="p-2 border-b border-gray-700 bg-gray-800/50">
+                    
+                    <!-- Single Row Input for d, p, h -->
+                    <div class="flex space-x-1 mb-2">
+                        <!-- dD Input -->
+                        <div class="flex-1 bg-gray-700/30 rounded border border-gray-600 flex items-center px-1 py-0.5" title="分散項 δd">
+                            <label class="text-[10px] text-gray-400 font-bold mr-1 cursor-help">d</label>
+                            <input type="number" id="input-d" step="0.1" class="w-full bg-transparent border-none p-0 text-sm text-center font-mono focus:outline-none text-white appearance-none">
+                        </div>
+
+                        <!-- dP Input -->
+                        <div class="flex-1 bg-gray-700/30 rounded border border-gray-600 flex items-center px-1 py-0.5" title="分極項 δp">
+                            <label class="text-[10px] text-gray-400 font-bold mr-1 cursor-help">p</label>
+                            <input type="number" id="input-p" step="0.1" class="w-full bg-transparent border-none p-0 text-sm text-center font-mono focus:outline-none text-white appearance-none">
+                        </div>
+
+                        <!-- dH Input -->
+                        <div class="flex-1 bg-gray-700/30 rounded border border-gray-600 flex items-center px-1 py-0.5" title="水素結合項 δh">
+                            <label class="text-[10px] text-gray-400 font-bold mr-1 cursor-help">h</label>
+                            <input type="number" id="input-h" step="0.1" class="w-full bg-transparent border-none p-0 text-sm text-center font-mono focus:outline-none text-white appearance-none">
+                        </div>
+                    </div>
+
+                    <!-- Radius Slider (Compact) -->
+                    <div class="flex items-center space-x-2">
+                        <span class="text-[10px] text-yellow-300 font-bold whitespace-nowrap" title="相互作用半径 R0">R0</span>
+                        <input type="range" min="1" max="20" step="0.1" id="input-r" class="flex-grow h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer range-slider">
+                        <span id="val-r" class="text-xs font-mono text-yellow-300 w-6 text-right">8.0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calculation Action Panel (Only visible in Calc Mode) -->
+            <div id="calc-action-panel" class="hidden p-2 bg-purple-900/40 border-b border-purple-700">
+                <div class="text-[10px] text-purple-200 mb-2 text-center">
+                    良溶媒(溶けるもの)にチェックを入れてください
+                </div>
+                <div class="flex space-x-2">
+                    <button id="execute-calc-btn" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-1.5 rounded transition-colors shadow-lg">
+                        <i class="fa-solid fa-calculator me-1"></i> 計算して適用
+                    </button>
+                    <button id="clear-checks-btn" class="px-2 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors" title="選択解除">
+                        <i class="fa-solid fa-eraser"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Add Custom Solvent Panel -->
+            <div class="border-b border-gray-700 bg-gray-800">
+                <button id="toggle-add-panel-btn" class="w-full flex justify-between items-center p-2 text-[10px] font-bold text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+                    <span><i class="fa-solid fa-plus-circle me-1 text-green-500"></i>新規成分を追加</span>
+                    <i class="fa-solid fa-chevron-down transition-transform" id="add-panel-arrow"></i>
+                </button>
+                
+                <div id="add-panel" class="hidden p-2 bg-gray-900/50 border-t border-gray-700">
+                    <div class="mb-2">
+                        <input type="text" id="new-name" placeholder="成分名 (例: New Solvent)" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div class="flex space-x-1 mb-2">
+                        <input type="number" id="new-d" placeholder="d" step="0.1" class="flex-1 bg-gray-700 border border-gray-600 rounded px-1 py-1 text-xs text-center text-white placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                        <input type="number" id="new-p" placeholder="p" step="0.1" class="flex-1 bg-gray-700 border border-gray-600 rounded px-1 py-1 text-xs text-center text-white placeholder-gray-500 focus:outline-none focus:border-green-500">
+                        <input type="number" id="new-h" placeholder="h" step="0.1" class="flex-1 bg-gray-700 border border-gray-600 rounded px-1 py-1 text-xs text-center text-white placeholder-gray-500 focus:outline-none focus:border-red-500">
+                    </div>
+                    <button id="add-solvent-btn" class="w-full bg-green-700 hover:bg-green-600 text-white text-xs font-bold py-1 rounded transition-colors">
+                        リストに追加
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mix Solvents Panel -->
+            <div class="border-b border-gray-700 bg-gray-800">
+                <button id="toggle-mix-panel-btn" class="w-full flex justify-between items-center p-2 text-[10px] font-bold text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+                    <span><i class="fa-solid fa-flask-vial me-1 text-yellow-500"></i>混合溶媒を作成</span>
+                    <i class="fa-solid fa-chevron-down transition-transform" id="mix-panel-arrow"></i>
+                </button>
+                
+                <div id="mix-panel" class="hidden p-2 bg-gray-900/50 border-t border-gray-700">
+                    <!-- Selector -->
+                    <div class="flex space-x-1 mb-2">
+                        <select id="mix-selector" class="flex-grow bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+                            <option value="">溶媒を選択...</option>
+                            <!-- Options will be populated by JS -->
+                        </select>
+                        <button id="add-to-mix-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-2 rounded text-xs">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
+
+                    <!-- Mixing List -->
+                    <div id="mix-list" class="space-y-1 mb-2 max-h-32 overflow-y-auto">
+                        <!-- Mix items will go here -->
+                    </div>
+
+                    <!-- Result Preview -->
+                    <div class="bg-gray-800 rounded p-1.5 mb-2 border border-gray-600 text-[10px]">
+                        <div class="flex justify-between items-center text-gray-400 mb-1">
+                            <span>混合HSP (加重平均)</span>
+                            <span id="mix-name-preview" class="text-xs text-white truncate max-w-[100px]">Mix Name</span>
+                        </div>
+                        <div class="flex justify-between font-mono text-xs">
+                            <span class="text-blue-300">d: <span id="mix-d">0.0</span></span>
+                            <span class="text-green-300">p: <span id="mix-p">0.0</span></span>
+                            <span class="text-red-300">h: <span id="mix-h">0.0</span></span>
+                        </div>
+                    </div>
+
+                    <button id="save-mix-btn" class="w-full bg-yellow-700 hover:bg-yellow-600 text-white text-xs font-bold py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        混合溶媒としてリストに追加
+                    </button>
+                </div>
+            </div>
+
+            <!-- Solvent List Header -->
+            <div class="px-2 py-1 bg-gray-800 border-y border-gray-700 flex justify-between items-center text-[10px] font-semibold text-gray-400 flex-shrink-0">
+                <div class="flex items-center space-x-2">
+                    <!-- Toggle All Button -->
+                    <button id="toggle-all-visible" class="text-gray-400 hover:text-white transition-colors" title="すべて表示/非表示">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                    <!-- Global Color Picker -->
+                    <div class="relative w-4 h-4 rounded-full overflow-hidden cursor-pointer shadow-sm border border-gray-500 hover:border-white transition-colors group" title="全溶媒の色を統一">
+                        <div class="absolute inset-0 bg-gray-700 group-hover:bg-gray-600 flex items-center justify-center pointer-events-none">
+                             <i class="fa-solid fa-palette text-[8px] text-gray-300 group-hover:text-white"></i>
+                        </div>
+                        <input type="color" id="global-color-picker" class="absolute -top-2 -left-2 w-8 h-8 opacity-0 cursor-pointer">
+                    </div>
+                    <span id="list-header-text">リスト</span>
+                </div>
+                <div class="flex space-x-2 text-[9px] font-mono">
+                    <span class="text-blue-400">RED1</span>
+                    <span class="text-orange-400 hidden" id="header-red2">RED2</span>
+                </div>
+            </div>
+
+            <!-- Solvent List (Scrollable Area) -->
+            <div class="flex-grow overflow-y-auto p-1 space-y-0.5 bg-gray-900" id="solvent-list">
+                <!-- Javascript will populate this -->
+            </div>
+            
+            <!-- Legend / Info -->
+            <div class="px-2 py-1 text-[9px] text-center text-gray-500 bg-gray-900 border-t border-gray-800 flex-shrink-0 grid grid-cols-3 gap-x-1">
+                <span class="text-white font-bold">● ターゲット</span>
+                <span class="text-green-400">● 両方可溶</span>
+                <span class="text-red-400">● 両方不溶</span>
+                <span class="text-blue-400">● T1のみ可溶</span>
+                <span class="text-orange-400">● T2のみ可溶</span>
+            </div>
+            
+            <!-- Copyright -->
+            <div class="px-2 py-1 text-[9px] text-center text-gray-600 bg-gray-950 border-t border-gray-800 flex-shrink-0">
+                著作権: persona laboratory
+            </div>
+        </div>
+
+        <!-- Toggle Button for Mobile Sidebar -->
+        <button id="sidebar-toggle" class="absolute bottom-4 right-4 md:hidden bg-blue-600 text-white w-10 h-10 rounded-full shadow-lg pointer-events-auto z-50 hover:bg-blue-500 transition-colors flex items-center justify-center">
+            <i class="fa-solid fa-list"></i>
+        </button>
+
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- データ定義 ---
+        
+        // 一般的な溶媒データ (HSP値)
+        const defaultSolventDatabase = [
+            // --- 生体 (Bio) ---
+            { name: "Skin (Human)", d: 17.6, p: 12.5, h: 11.0, type: "bio" },
+            { name: "Hair (Keratin)", d: 20.5, p: 10.0, h: 15.0, type: "bio" },
+            { name: "Nail (Plate)", d: 20.6, p: 13.0, h: 13.0, type: "bio" },
+
+            // --- ポリマー (Polymers) ---
+            { name: "PS (Polystyrene)", d: 21.3, p: 5.8, h: 4.3, type: "poly" },
+            { name: "PMMA", d: 18.6, p: 10.5, h: 7.5, type: "poly" },
+            { name: "PLA (Polylactic acid)", d: 18.6, p: 9.9, h: 6.0, type: "poly" },
+            { name: "PVC (Polyvinyl Chloride)", d: 18.2, p: 7.5, h: 8.3, type: "poly" },
+            { name: "PE (Polyethylene)", d: 16.9, p: 0.8, h: 2.8, type: "poly" },
+            { name: "PP (Polypropylene)", d: 17.9, p: 1.1, h: 2.7, type: "poly" },
+            { name: "PET (Polyester)", d: 18.2, p: 6.4, h: 6.6, type: "poly" },
+            { name: "PC (Polycarbonate)", d: 19.0, p: 9.0, h: 6.0, type: "poly" },
+            { name: "Nylon 6,6", d: 19.5, p: 12.5, h: 11.0, type: "poly" },
+            { name: "PVDF", d: 17.2, p: 12.5, h: 9.2, type: "poly" },
+            { name: "Epoxy (Bisphenol A)", d: 20.2, p: 10.1, h: 9.3, type: "poly" },
+            { name: "PU (Polyurethane)", d: 18.1, p: 9.3, h: 6.4, type: "poly" },
+            { name: "ABS", d: 20.2, p: 6.8, h: 6.3, type: "poly" },
+            { name: "PAN (Polyacrylonitrile)", d: 21.7, p: 14.1, h: 9.1, type: "poly" },
+            { name: "Cellulose Acetate", d: 18.6, p: 12.7, h: 11.0, type: "poly" },
+
+            // --- 有機溶媒 (Solvents) ---
+            // アルコール
+            { name: "Methanol", d: 15.1, p: 12.3, h: 22.3 },
+            { name: "Ethanol", d: 15.8, p: 8.8, h: 19.4 },
+            { name: "n-Propanol", d: 16.0, p: 6.8, h: 17.4 },
+            { name: "IPA (Isopropanol)", d: 15.8, p: 6.1, h: 16.4 },
+            { name: "n-Butanol", d: 16.0, p: 5.7, h: 15.8 },
+            { name: "Benzyl Alcohol", d: 18.4, p: 6.3, h: 13.7 },
+            { name: "Cyclohexanol", d: 17.4, p: 4.1, h: 13.5 },
+            { name: "Diacetone Alcohol", d: 15.8, p: 8.2, h: 10.8 },
+            
+            // グリコール・多価アルコール
+            { name: "Water", d: 15.5, p: 16.0, h: 42.3 },
+            { name: "Ethylene Glycol", d: 17.0, p: 11.0, h: 26.0 },
+            { name: "Propylene Glycol", d: 16.8, p: 9.4, h: 23.3 },
+            { name: "Glycerin", d: 17.4, p: 12.1, h: 29.3 },
+
+            // ケトン
+            { name: "Acetone", d: 15.5, p: 10.4, h: 7.0 },
+            { name: "MEK", d: 16.0, p: 9.0, h: 5.1 },
+            { name: "MIBK", d: 15.3, p: 6.1, h: 4.1 },
+            { name: "Cyclohexanone", d: 17.8, p: 6.3, h: 5.1 },
+            { name: "Isophorone", d: 16.6, p: 8.2, h: 7.4 },
+            { name: "NMP", d: 18.0, p: 12.3, h: 7.2 },
+
+            // エステル
+            { name: "Methyl Acetate", d: 15.5, p: 7.2, h: 7.6 },
+            { name: "Ethyl Acetate", d: 15.8, p: 5.3, h: 7.2 },
+            { name: "Butyl Acetate", d: 15.8, p: 3.7, h: 6.3 },
+            { name: "Isobutyl Acetate", d: 15.1, p: 3.7, h: 6.3 },
+            { name: "Propylene Carbonate", d: 20.0, p: 18.0, h: 4.1 },
+            { name: "gamma-Butyrolactone", d: 19.0, p: 16.6, h: 7.4 },
+
+            // エーテル
+            { name: "THF", d: 16.8, p: 5.7, h: 8.0 },
+            { name: "1,4-Dioxane", d: 19.0, p: 1.8, h: 7.4 },
+            { name: "Diethyl Ether", d: 14.5, p: 2.9, h: 5.1 },
+            { name: "MTBE", d: 14.8, p: 4.3, h: 5.0 },
+
+            // 炭化水素 (芳香族・脂肪族)
+            { name: "Benzene", d: 18.4, p: 0.0, h: 2.0 },
+            { name: "Toluene", d: 18.0, p: 1.4, h: 2.0 },
+            { name: "Xylene", d: 17.6, p: 1.0, h: 3.1 },
+            { name: "Styrene", d: 18.6, p: 1.0, h: 4.1 },
+            { name: "n-Hexane", d: 14.9, p: 0.0, h: 0.0 },
+            { name: "Cyclohexane", d: 16.8, p: 0.0, h: 0.2 },
+            { name: "Heptane", d: 15.3, p: 0.0, h: 0.0 },
+            { name: "Mineral Spirits", d: 15.8, p: 0.0, h: 0.0 },
+            { name: "Turpentine", d: 16.6, p: 1.8, h: 3.7 },
+            { name: "d-Limonene", d: 17.2, p: 1.8, h: 4.3 },
+
+            // 塩素系
+            { name: "Chloroform", d: 17.8, p: 3.1, h: 5.7 },
+            { name: "Dichloromethane", d: 18.2, p: 6.3, h: 6.1 },
+            { name: "Trichloroethylene", d: 18.0, p: 3.1, h: 5.3 },
+            { name: "Chlorobenzene", d: 19.0, p: 4.3, h: 2.0 },
+            { name: "1,2-Dichloroethane", d: 19.0, p: 7.4, h: 4.1 },
+
+            // 含窒素・その他極性
+            { name: "DMF", d: 17.4, p: 13.7, h: 11.3 },
+            { name: "DMAc", d: 16.8, p: 11.5, h: 10.2 },
+            { name: "DMSO", d: 18.4, p: 16.4, h: 10.2 },
+            { name: "Acetonitrile", d: 15.3, p: 18.0, h: 6.1 },
+            { name: "Pyridine", d: 19.0, p: 8.8, h: 5.9 },
+            { name: "Formamide", d: 17.2, p: 26.2, h: 19.0 },
+            { name: "Aniline", d: 19.4, p: 5.1, h: 10.2 },
+            { name: "Nitrobenzene", d: 20.0, p: 8.6, h: 4.1 },
+
+            // その他
+            { name: "Acetic Acid", d: 14.5, p: 8.0, h: 13.5 },
+            { name: "Oleic Acid", d: 14.3, p: 3.1, h: 14.3 },
+            { name: "CS2", d: 20.5, p: 0.0, h: 0.6 },
+        ];
+
+        // 実行時のデータベース (初期化時にロード)
+        let solventDatabase = [];
+
+        // アプリケーションの状態 (Dual Target)
+        let state = {
+            activeTargetIndex: 0, // 0 or 1
+            showTarget2: true,    // ターゲット2の表示状態
+            isCalculationMode: false, // 計算モードフラグ
+            targets: [
+                { d: 18.0, p: 10.0, h: 10.0, r: 8.0, color: 0x3b82f6 }, // Target 1 (Blue)
+                { d: 17.6, p: 12.5, h: 11.0, r: 6.0, color: 0xf97316 }  // Target 2 (Orange) - Default Skin
+            ],
+            solvents: [] 
+        };
+
+        // 混合用の一時データ
+        let mixingSolvents = [];
+
+        // --- 設定保存/読込ロジック ---
+
+        const STORAGE_KEY = 'hsp_simulator_data';
+
+        function applyImportedData(data) {
+            // ターゲット復元
+            if (data.targets) state.targets = data.targets;
+            if (data.activeTargetIndex !== undefined) state.activeTargetIndex = data.activeTargetIndex;
+            if (data.showTarget2 !== undefined) state.showTarget2 = data.showTarget2; // 復元
+
+            // 溶媒リスト復元
+            solventDatabase = JSON.parse(JSON.stringify(defaultSolventDatabase));
+            
+            // カスタム溶媒の追加
+            if (data.customSolvents) {
+                data.customSolvents.forEach(custom => {
+                    if (!solventDatabase.some(s => s.name === custom.name)) {
+                        solventDatabase.push(custom);
+                    }
+                });
+            }
+
+            // 表示状態と色の適用
+            solventDatabase.forEach(s => {
+                // Visibility
+                if (data.visibility && data.visibility.hasOwnProperty(s.name)) {
+                    s.visible = data.visibility[s.name];
+                } else {
+                    s.visible = true; 
+                }
+                
+                // Colors
+                if (data.customColors && data.customColors.hasOwnProperty(s.name)) {
+                    s.customColor = data.customColors[s.name];
+                }
+            });
+            
+            // UI更新
+            updateMixSelector();
+            updateTarget2VisibilityIcon(); // アイコン状態更新
+            syncInputsWithState();
+            switchTab(state.activeTargetIndex, false);
+            updateSimulation();
+            
+            showNotification("ファイルを読み込みました", "bg-green-600");
+        }
+
+        function loadSettings() {
+            try {
+                const savedJson = localStorage.getItem(STORAGE_KEY);
+                if (savedJson) {
+                    const savedData = JSON.parse(savedJson);
+                    applyImportedData(savedData);
+                } else {
+                    resetToDefault();
+                }
+            } catch (e) {
+                console.error("Failed to load settings", e);
+                resetToDefault();
+            }
+            
+            // 全ての溶媒に計算用選択フラグを初期化
+            solventDatabase.forEach(s => {
+                if (s.selectedForCalc === undefined) s.selectedForCalc = false;
+            });
+        }
+
+        function getExportData() {
+            return {
+                targets: state.targets,
+                activeTargetIndex: state.activeTargetIndex,
+                showTarget2: state.showTarget2, // 保存
+                customSolvents: solventDatabase.filter(s => s.isCustom),
+                // 表示状態の保存
+                visibility: solventDatabase.reduce((acc, s) => {
+                    acc[s.name] = s.visible;
+                    return acc;
+                }, {}),
+                // カスタム色の保存
+                customColors: solventDatabase.reduce((acc, s) => {
+                    if (s.customColor) acc[s.name] = s.customColor;
+                    return acc;
+                }, {})
+            };
+        }
+
+        function saveSettings() {
+            try {
+                const saveData = getExportData();
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+                showNotification("設定を保存しました", "bg-green-600");
+            } catch (e) {
+                console.error("Failed to save settings", e);
+                alert("保存に失敗しました");
+            }
+        }
+        
+        function exportSettingsToFile() {
+            try {
+                const data = getExportData();
+                const jsonStr = JSON.stringify(data, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                // 日時を含めたファイル名
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0,10).replace(/-/g, '');
+                const fileName = `hsp_data_${dateStr}.json`;
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showNotification("ファイルを保存しました", "bg-blue-600");
+            } catch (e) {
+                console.error("Failed to export settings", e);
+                alert("ファイル保存に失敗しました");
+            }
+        }
+        
+        function importSettingsFromFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = event => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (!data || typeof data !== 'object') throw new Error("Invalid JSON");
+                        applyImportedData(data);
+                    } catch (err) {
+                        console.error("Import error", err);
+                        alert('ファイルの読み込みに失敗しました。形式を確認してください。');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            
+            input.click();
+        }
+
+        function resetSettings() {
+            if (confirm("設定を初期状態に戻しますか？\n追加したカスタム成分も削除されます。")) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        function resetToDefault() {
+            solventDatabase = JSON.parse(JSON.stringify(defaultSolventDatabase));
+            solventDatabase.forEach(s => s.visible = true);
+            state = {
+                activeTargetIndex: 0,
+                showTarget2: true, // デフォルト表示
+                isCalculationMode: false,
+                targets: [
+                    { d: 18.0, p: 10.0, h: 10.0, r: 8.0, color: 0x3b82f6 },
+                    { d: 17.6, p: 12.5, h: 11.0, r: 6.0, color: 0xf97316 }
+                ],
+                solvents: []
+            };
+        }
+        
+        function showNotification(msg, bgColorClass) {
+            const notif = document.getElementById('notification');
+            notif.innerText = msg;
+            notif.className = `absolute w-full z-50 top-0 left-0 transition-opacity duration-500 text-white text-xs text-center py-1 ${bgColorClass}`;
+            notif.classList.remove('hidden', 'opacity-0');
+            setTimeout(() => {
+                notif.classList.add('opacity-0');
+                setTimeout(() => notif.classList.add('hidden'), 500);
+            }, 2000);
+        }
+
+        // --- Three.js セットアップ ---
+        
+        let scene, camera, renderer, controls;
+        let targetMeshes = [], sphereMeshes = [];
+        let solventMeshes = [];
+        let raycaster, mouse;
+        
+        function initThree() {
+            // 初期ロード（Local Storageから）
+            loadSettings();
+            
+            // 混合パネルのセレクタ更新
+            updateMixSelector();
+            
+            // T2表示アイコンの初期化
+            updateTarget2VisibilityIcon();
+
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a); 
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(40, 30, 50);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
+            scene.add(ambientLight);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            dirLight.position.set(20, 40, 20);
+            scene.add(dirLight);
+
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            fillLight.position.set(-20, 10, 40);
+            scene.add(fillLight);
+
+            const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            backLight.position.set(0, -20, -20);
+            scene.add(backLight);
+
+            createGrids();
+            createAxes();
+
+            state.targets.forEach((target, i) => {
+                const sphereGeo = new THREE.SphereGeometry(1, 32, 32);
+                const sphereMat = new THREE.MeshBasicMaterial({ 
+                    color: target.color, 
+                    transparent: true, 
+                    opacity: 0.15, 
+                    wireframe: false,
+                    depthWrite: false
+                });
+                const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+                
+                const wireGeo = new THREE.WireframeGeometry(sphereGeo);
+                const wireMat = new THREE.LineBasicMaterial({ color: target.color, transparent: true, opacity: 0.4, linewidth: 2 });
+                const wire = new THREE.LineSegments(wireGeo, wireMat);
+                sphere.add(wire);
+                
+                scene.add(sphere);
+                sphereMeshes.push(sphere);
+
+                const pointGeo = new THREE.SphereGeometry(0.8, 16, 16);
+                const pointMat = new THREE.MeshStandardMaterial({ 
+                    color: 0xffffff, 
+                    emissive: target.color, 
+                    emissiveIntensity: 0.8 
+                });
+                const point = new THREE.Mesh(pointGeo, pointMat);
+                scene.add(point);
+                targetMeshes.push(point);
+            });
+
+            syncInputsWithState();
+            switchTab(state.activeTargetIndex, false); 
+            updateSimulation();
+            animate();
+
+            // Set up raycaster event listener on the container (canvas)
+            // Use pointermove to handle both mouse and touch reasonably well
+            container.addEventListener('pointermove', onMouseMove);
+        }
+
+        function createGrids() {
+            const gridGroup = new THREE.Group();
+            const gridMaterial = new THREE.LineBasicMaterial({ color: 0x444444, transparent: true, opacity: 0.5 });
+
+            const maxX = 60;
+            const maxY = 40;
+            const maxZ = 50;
+            const step = 10;
+
+            for (let x = 0; x <= maxX; x += step) {
+                const points = [new THREE.Vector3(x, 0, 0), new THREE.Vector3(x, 0, maxZ)];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                gridGroup.add(new THREE.Line(geo, gridMaterial));
+            }
+            for (let z = 0; z <= maxZ; z += step) {
+                const points = [new THREE.Vector3(0, 0, z), new THREE.Vector3(maxX, 0, z)];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                gridGroup.add(new THREE.Line(geo, gridMaterial));
+            }
+
+            for (let x = 0; x <= maxX; x += step) {
+                const points = [new THREE.Vector3(x, 0, 0), new THREE.Vector3(x, maxY, 0)];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                gridGroup.add(new THREE.Line(geo, gridMaterial));
+            }
+            for (let y = 0; y <= maxY; y += step) {
+                const points = [new THREE.Vector3(0, y, 0), new THREE.Vector3(maxX, y, 0)];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                gridGroup.add(new THREE.Line(geo, gridMaterial));
+            }
+
+            for (let z = 0; z <= maxZ; z += step) {
+                const points = [new THREE.Vector3(0, 0, z), new THREE.Vector3(0, maxY, z)];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                gridGroup.add(new THREE.Line(geo, gridMaterial));
+            }
+            for (let y = 0; y <= maxY; y += step) {
+                const points = [new THREE.Vector3(0, y, 0), new THREE.Vector3(0, y, maxZ)];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                gridGroup.add(new THREE.Line(geo, gridMaterial));
+            }
+
+            scene.add(gridGroup);
+        }
+
+        function makeTextSprite(message, parameters) {
+            if ( parameters === undefined ) parameters = {};
+            const fontface = parameters.hasOwnProperty("fontface") ? parameters["fontface"] : "Arial";
+            const fontsize = parameters.hasOwnProperty("fontsize") ? parameters["fontsize"] : 100;
+            const textColor = parameters.hasOwnProperty("textColor") ? parameters["textColor"] : { r:255, g:255, b:255, a:1.0 };
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 1024;
+            canvas.height = 512;
+            
+            // Boldにして視認性は保つが、Stroke（縁取り）は削除してシンプルに
+            context.font = "Bold " + fontsize + "px " + fontface;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            
+            context.fillStyle = `rgba(${textColor.r},${textColor.g},${textColor.b},${textColor.a})`;
+            context.fillText(message, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas); 
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(20, 10, 1);
+            return sprite;
+        }
+
+        function createAxes() {
+            const axesGroup = new THREE.Group();
+            
+            const drawAxis = (axisVec, length, color, labelName, valueScale = 1.0) => {
+                // 1. 軸線 (太くする - これは維持)
+                const lineRadius = 0.3;
+                const lineGeo = new THREE.CylinderGeometry(lineRadius, lineRadius, length, 12);
+                const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.6 });
+                const axisMesh = new THREE.Mesh(lineGeo, material);
+                
+                const offset = axisVec.clone().multiplyScalar(length / 2);
+                axisMesh.position.copy(offset);
+                
+                if (axisVec.x > 0) axisMesh.rotation.z = -Math.PI / 2;
+                if (axisVec.z > 0) axisMesh.rotation.x = Math.PI / 2;
+                
+                axesGroup.add(axisMesh);
+
+                // 2. 軸ラベル
+                const labelSprite = makeTextSprite(labelName, { 
+                    fontsize: 160, 
+                    textColor: { r: (color >> 16 & 255), g: (color >> 8 & 255), b: (color & 255), a: 1.0 } 
+                });
+                const labelPos = axisVec.clone().multiplyScalar(length + 8);
+                labelSprite.position.copy(labelPos);
+                labelSprite.scale.set(35, 17.5, 1); 
+                axesGroup.add(labelSprite);
+
+                // 3. 目盛り
+                const step = 10;
+                for (let i = step; i <= length; i += step) {
+                    const tickPos = axisVec.clone().multiplyScalar(i);
+                    const displayValue = i * valueScale;
+                    const numSprite = makeTextSprite(displayValue.toString(), { 
+                        fontsize: 120,
+                        textColor: {r:255, g:255, b:255, a:1.0} 
+                    });
+                    
+                    let textOffset;
+                    if (axisVec.x > 0) textOffset = new THREE.Vector3(0, -6, 0);
+                    else if (axisVec.y > 0) textOffset = new THREE.Vector3(-7, 0, 0);
+                    else textOffset = new THREE.Vector3(0, -6, 0);
+                    
+                    numSprite.position.copy(tickPos).add(textOffset);
+                    numSprite.scale.set(20, 10, 1); 
+                    axesGroup.add(numSprite);
+
+                    // メモリ線
+                    const tickLength = 2.5;
+                    const tickThickness = 0.25;
+                    let boxGeo;
+                    
+                    if (axisVec.x > 0) {
+                        boxGeo = new THREE.BoxGeometry(tickThickness, tickLength, tickThickness);
+                        const tickMesh = new THREE.Mesh(boxGeo, material);
+                        tickMesh.position.copy(tickPos).add(new THREE.Vector3(0, -tickLength/2, 0));
+                        axesGroup.add(tickMesh);
+                    } else if (axisVec.y > 0) {
+                        boxGeo = new THREE.BoxGeometry(tickLength, tickThickness, tickThickness);
+                        const tickMesh = new THREE.Mesh(boxGeo, material);
+                        tickMesh.position.copy(tickPos).add(new THREE.Vector3(-tickLength/2, 0, 0));
+                        axesGroup.add(tickMesh);
+                    } else {
+                        boxGeo = new THREE.BoxGeometry(tickThickness, tickLength, tickThickness);
+                        const tickMesh = new THREE.Mesh(boxGeo, material);
+                        tickMesh.position.copy(tickPos).add(new THREE.Vector3(0, -tickLength/2, 0));
+                        axesGroup.add(tickMesh);
+                    }
+                }
+            };
+
+            drawAxis(new THREE.Vector3(1, 0, 0), 60, 0x3b82f6, "δd", 0.5);
+            drawAxis(new THREE.Vector3(0, 1, 0), 40, 0x10b981, "δp", 1.0);
+            drawAxis(new THREE.Vector3(0, 0, 1), 50, 0xef4444, "δh", 1.0);
+
+            scene.add(axesGroup);
+        }
+
+        // --- シミュレーション ロジック ---
+
+        function calculateHSP() {
+            state.solvents = solventDatabase.map(solvent => {
+                const results = state.targets.map(target => {
+                    const dDiff = solvent.d - target.d;
+                    const pDiff = solvent.p - target.p;
+                    const hDiff = solvent.h - target.h;
+                    const ra2 = 4 * (dDiff * dDiff) + (pDiff * pDiff) + (hDiff * hDiff);
+                    const ra = Math.sqrt(ra2);
+                    const red = ra / target.r;
+                    return { ra, red };
+                });
+
+                return { 
+                    ...solvent, 
+                    visible: solvent.visible !== undefined ? solvent.visible : true,
+                    red1: results[0].red, 
+                    ra1: results[0].ra,
+                    red2: results[1].red,
+                    ra2: results[1].ra
+                };
+            });
+            
+            // ソート: まず表示状態(visibleがtrue優先)、次にRED値
+            state.solvents.sort((a, b) => {
+                // 1. 表示状態 (visible: true が先)
+                if (a.visible !== b.visible) {
+                    return a.visible ? -1 : 1;
+                }
+                
+                // 2. RED値 (小さい順)
+                if (state.activeTargetIndex === 0) {
+                    return a.red1 - b.red1;
+                } else {
+                    return a.red2 - b.red2;
+                }
+            });
+        }
+
+        function updateSimulation() {
+            calculateHSP();
+
+            const t1 = state.targets[0];
+            const t2 = state.targets[1];
+            const epsilon = 0.05;
+
+            // Target 2 Visibility Handling for 3D
+            const isT2Visible = state.showTarget2;
+
+            state.targets.forEach((target, i) => {
+                // If Target 2, obey visibility flag
+                const isVisible = (i === 1) ? isT2Visible : true;
+                
+                const tx = target.d * 2;
+                const ty = target.p;
+                const tz = target.h;
+
+                if (targetMeshes[i]) {
+                    targetMeshes[i].position.set(tx, ty, tz);
+                    targetMeshes[i].visible = isVisible;
+                }
+                if (sphereMeshes[i]) {
+                    sphereMeshes[i].position.set(tx, ty, tz);
+                    sphereMeshes[i].scale.set(target.r, target.r, target.r);
+                    sphereMeshes[i].visible = isVisible;
+                }
+            });
+
+            solventMeshes.forEach(mesh => scene.remove(mesh));
+            solventMeshes = [];
+
+            state.solvents.forEach(s => {
+                if (!s.visible) return;
+
+                const sx = s.d * 2;
+                const sy = s.p;
+                const sz = s.h;
+
+                // 球体を元のサイズに戻す (0.9 -> 0.6)
+                const geometry = new THREE.SphereGeometry(0.6, 16, 16);
+                
+                const t1Ok = s.red1 <= 1.0;
+                const t2Ok = s.red2 <= 1.0;
+                
+                const isT1 = Math.abs(s.d - t1.d) < epsilon && Math.abs(s.p - t1.p) < epsilon && Math.abs(s.h - t1.h) < epsilon;
+                const isT2 = Math.abs(s.d - t2.d) < epsilon && Math.abs(s.p - t2.p) < epsilon && Math.abs(s.h - t2.h) < epsilon;
+                const isTarget = isT1 || isT2;
+
+                // 色決定ロジック
+                let colorInt;
+                let displayColorHex;
+                
+                // 1. ターゲット (最優先)
+                if (isTarget) {
+                    colorInt = 0xffffff;
+                    displayColorHex = '#ffffff';
+                }
+                // 2. 良溶媒判定 (ルールに従う)
+                else if (t1Ok && t2Ok) {
+                    colorInt = 0x10b981; 
+                    displayColorHex = '#10b981';
+                } else if (t1Ok) {
+                    colorInt = 0x3b82f6; 
+                    displayColorHex = '#3b82f6';
+                } else if (t2Ok) {
+                    colorInt = 0xf97316; 
+                    displayColorHex = '#f97316';
+                }
+                // 3. それ以外 (貧溶媒)
+                else {
+                    if (s.customColor) {
+                        // ユーザー指定色
+                        displayColorHex = s.customColor;
+                        colorInt = parseInt(s.customColor.replace('#', ''), 16);
+                    } else if (s.type === 'bio' || s.type === 'poly') {
+                        // Bio/Poly デフォルト
+                        colorInt = 0xd946ef; 
+                        displayColorHex = '#d946ef';
+                    } else {
+                        // 通常の貧溶媒 デフォルト (赤)
+                        colorInt = 0xef4444; 
+                        displayColorHex = '#ef4444';
+                    }
+                }
+                
+                // UI表示用に一時保存
+                s.displayColorHex = displayColorHex;
+
+
+                // マテリアルを元の質感（Emissive控えめ）に戻す
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: colorInt,
+                    roughness: 0.4,
+                    metalness: 0.2,
+                    emissive: isTarget ? 0x444444 : 0x000000 // ターゲット以外は発光させない
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(sx, sy, sz);
+                
+                if (isTarget) {
+                    mesh.scale.set(1.5, 1.5, 1.5);
+                }
+                mesh.userData = s; 
+
+                scene.add(mesh);
+                solventMeshes.push(mesh);
+            });
+
+            updateUIList();
+        }
+        
+        // T2 Toggle Logic
+        const toggleT2Vis = document.getElementById('toggle-t2-vis');
+        toggleT2Vis.addEventListener('click', (e) => {
+            e.stopPropagation(); // prevent tab switch
+            state.showTarget2 = !state.showTarget2;
+            updateTarget2VisibilityIcon();
+            updateSimulation();
+        });
+        
+        function updateTarget2VisibilityIcon() {
+            if (state.showTarget2) {
+                toggleT2Vis.classList.remove('fa-eye-slash', 'text-gray-500');
+                toggleT2Vis.classList.add('fa-eye', 'text-white');
+            } else {
+                toggleT2Vis.classList.remove('fa-eye', 'text-white');
+                toggleT2Vis.classList.add('fa-eye-slash', 'text-gray-500');
+            }
+        }
+
+        function updateUIList() {
+            const listEl = document.getElementById('solvent-list');
+            listEl.innerHTML = '';
+            
+            // Header visibility for RED2
+            const headerRed2 = document.getElementById('header-red2');
+            if (state.showTarget2) {
+                headerRed2.classList.remove('hidden');
+            } else {
+                headerRed2.classList.add('hidden');
+            }
+
+            const t1 = state.targets[0];
+            const t2 = state.targets[1];
+            const epsilon = 0.05;
+
+            state.solvents.forEach((s, index) => {
+                const el = document.createElement('div');
+                const t1Ok = s.red1 <= 1.0;
+                const t2Ok = s.red2 <= 1.0;
+                
+                const isT1 = Math.abs(s.d - t1.d) < epsilon && Math.abs(s.p - t1.p) < epsilon && Math.abs(s.h - t1.h) < epsilon;
+                const isT2 = Math.abs(s.d - t2.d) < epsilon && Math.abs(s.p - t2.p) < epsilon && Math.abs(s.h - t2.h) < epsilon;
+                const isTarget = isT1 || isT2;
+
+                let borderColorClass = 'border-gray-700';
+                let bgClass = 'bg-gray-800/30';
+                let textClass = 'text-gray-200';
+                
+                if (!s.visible) {
+                    bgClass = 'bg-gray-900/50';
+                    borderColorClass = 'border-gray-800';
+                } else {
+                    if (isTarget) {
+                        bgClass = 'bg-white/20'; 
+                        borderColorClass = 'border-white/50';
+                        textClass = 'text-white font-bold';
+                    } else if (t1Ok && t2Ok) {
+                        bgClass = 'bg-green-900/20';
+                        borderColorClass = 'border-green-800/40';
+                    } else if (t1Ok) {
+                        bgClass = 'bg-blue-900/20';
+                        borderColorClass = 'border-blue-800/40';
+                    } else if (t2Ok) {
+                        bgClass = 'bg-orange-900/20';
+                        borderColorClass = 'border-orange-800/40';
+                    } else {
+                        bgClass = 'bg-red-900/10';
+                        borderColorClass = 'border-red-800/20';
+                    }
+                }
+
+                let icon = '';
+                if (s.type === 'bio') icon = '<i class="fa-solid fa-user-astronaut text-fuchsia-400 mr-1 text-[9px]"></i>';
+                else if (s.type === 'poly') icon = '<i class="fa-solid fa-cube text-fuchsia-400 mr-1 text-[9px]"></i>';
+                
+                if (isTarget) {
+                    icon = '<i class="fa-solid fa-crosshairs text-white mr-1 text-[9px]"></i>' + icon;
+                }
+
+                // 削除ボタンの定義
+                let deleteBtn = '';
+                if (s.isCustom) {
+                    deleteBtn = `<div class="delete-btn w-4 h-4 flex items-center justify-center text-red-500 hover:text-red-300 cursor-pointer ml-1" title="削除">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                 </div>`;
+                }
+                
+                // Color Picker Element
+                // updateSimulation で計算した表示色を使用
+                const displayColorHex = s.displayColorHex || '#cccccc';
+                
+                let colorPicker = `<div class="relative w-3 h-3 me-1 rounded-full overflow-hidden cursor-pointer shadow-sm border border-gray-500" style="background-color: ${displayColorHex}">
+                    <input type="color" class="absolute -top-1 -left-1 w-8 h-8 opacity-0 cursor-pointer color-change-input" data-name="${s.name}" value="${s.customColor || displayColorHex}">
+                </div>`;
+
+                // leftContent の定義を復活
+                let leftContent = '';
+                if (state.isCalculationMode) {
+                    leftContent = `<div class="flex items-center me-2">
+                                    <input type="checkbox" class="custom-checkbox calc-checkbox" data-name="${s.name}" ${s.selectedForCalc ? 'checked' : ''}>
+                                   </div>`;
+                } else {
+                    leftContent = `<div class="eye-toggle w-4 h-4 flex items-center justify-center text-gray-500 hover:text-white cursor-pointer me-1" title="${s.visible ? '非表示にする' : '表示する'}">
+                                    <i class="fa-solid ${s.visible ? 'fa-eye' : 'fa-eye-slash'}"></i>
+                                   </div>${colorPicker}${deleteBtn}`;
+                }
+                
+                // RED2 Visibility for Row
+                const red2Style = state.showTarget2 ? '' : 'hidden';
+
+                el.className = `flex justify-between items-center px-2 py-1 rounded text-xs border transition-colors cursor-pointer group hover:bg-white/10 ${bgClass} ${borderColorClass} ${s.visible ? '' : 'opacity-60'}`;
+                
+                el.innerHTML = `
+                    <div class="flex items-center space-x-1 min-w-0 pr-2">
+                        ${leftContent}
+                        <div class="flex flex-col min-w-0">
+                            <div class="flex items-center">
+                                ${icon}
+                                <span class="${textClass} truncate" title="${s.name}">${s.name}</span>
+                            </div>
+                            <div class="flex text-[9px] text-gray-500 font-mono group-hover:text-gray-300 space-x-1">
+                                 <span>d${s.d}</span><span>p${s.p}</span><span>h${s.h}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right flex-shrink-0 flex flex-col items-end">
+                        <div class="font-mono font-bold ${t1Ok ? 'text-blue-400' : 'text-gray-500'}">${s.red1.toFixed(2)}</div>
+                        <div class="font-mono font-bold ${t2Ok ? 'text-orange-400' : 'text-gray-500'} ${red2Style}">${s.red2.toFixed(2)}</div>
+                    </div>
+                `;
+                
+                el.addEventListener('click', (e) => {
+                    // カラーピッカー変更時
+                    if (e.target.classList.contains('color-change-input')) {
+                        e.stopPropagation();
+                        // inputイベントは別途リッスンするか、ここでchangeを拾う
+                        // ここではclick伝播防止のみ
+                        return;
+                    }
+
+                    if (e.target.classList.contains('calc-checkbox')) {
+                        e.stopPropagation();
+                        toggleCalcSelection(s.name, e.target.checked);
+                        return;
+                    }
+                    if (e.target.closest('.eye-toggle')) {
+                        e.stopPropagation();
+                        toggleVisibility(s.name);
+                        return;
+                    }
+                    if (e.target.closest('.delete-btn')) {
+                        e.stopPropagation();
+                        if(confirm(`${s.name} を削除しますか？`)) {
+                            removeSolvent(s.name);
+                        }
+                        return;
+                    }
+                    
+                    if (state.isCalculationMode) {
+                        const cb = el.querySelector('.calc-checkbox');
+                        if (cb) {
+                            cb.checked = !cb.checked;
+                            toggleCalcSelection(s.name, cb.checked);
+                        }
+                        return;
+                    }
+
+                    setTarget(s.d, s.p, s.h);
+                });
+                
+                // Color Picker Change Event
+                const colorInput = el.querySelector('.color-change-input');
+                if(colorInput) {
+                    colorInput.addEventListener('input', (e) => {
+                        e.stopPropagation();
+                        updateSolventColor(s.name, e.target.value);
+                    });
+                    colorInput.addEventListener('click', (e) => e.stopPropagation());
+                }
+                
+                listEl.appendChild(el);
+            });
+        }
+        
+        function updateSolventColor(name, colorHex) {
+            const solvent = solventDatabase.find(s => s.name === name);
+            if(solvent) {
+                solvent.customColor = colorHex;
+                updateSimulation();
+            }
+        }
+
+        // Global Color Picker
+        document.getElementById('global-color-picker').addEventListener('input', (e) => {
+            const color = e.target.value;
+            solventDatabase.forEach(s => {
+                s.customColor = color;
+            });
+            updateSimulation();
+        });
+
+        // --- Mix Panel Logic ---
+        
+        const toggleMixPanelBtn = document.getElementById('toggle-mix-panel-btn');
+        const mixPanel = document.getElementById('mix-panel');
+        const mixPanelArrow = document.getElementById('mix-panel-arrow');
+        const mixSelector = document.getElementById('mix-selector');
+        const addToMixBtn = document.getElementById('add-to-mix-btn');
+        const mixListContainer = document.getElementById('mix-list');
+        const saveMixBtn = document.getElementById('save-mix-btn');
+        
+        let isMixPanelOpen = false;
+
+        function toggleMixPanel() {
+            isMixPanelOpen = !isMixPanelOpen;
+            if (isMixPanelOpen) {
+                mixPanel.classList.remove('hidden');
+                mixPanelArrow.classList.add('rotate-180');
+            } else {
+                mixPanel.classList.add('hidden');
+                mixPanelArrow.classList.remove('rotate-180');
+            }
+        }
+        
+        function updateMixSelector() {
+            mixSelector.innerHTML = '<option value="">溶媒を選択...</option>';
+            // Sort database alphabetically for easier selection
+            const sortedDb = [...solventDatabase].sort((a, b) => a.name.localeCompare(b.name));
+            sortedDb.forEach((s, index) => {
+                const opt = document.createElement('option');
+                opt.value = s.name; // Using name as key
+                opt.textContent = s.name;
+                mixSelector.appendChild(opt);
+            });
+        }
+
+        function renderMixList() {
+            mixListContainer.innerHTML = '';
+            mixingSolvents.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center space-x-2 bg-gray-700/50 p-1 rounded';
+                row.innerHTML = `
+                    <div class="flex-grow min-w-0">
+                        <div class="text-[10px] font-bold truncate">${item.solvent.name}</div>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <input type="number" min="0" value="${item.ratio}" class="mix-ratio-input w-12 bg-gray-800 border border-gray-600 rounded text-center text-xs px-1 py-0.5" data-index="${index}">
+                        <button class="mix-remove-btn text-red-400 hover:text-red-300 w-4 h-4 flex items-center justify-center" data-index="${index}">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                mixListContainer.appendChild(row);
+            });
+            
+            // Add listeners
+            document.querySelectorAll('.mix-ratio-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.dataset.index);
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val >= 0) {
+                        mixingSolvents[idx].ratio = val;
+                        calculateMixHSP();
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.mix-remove-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.closest('button').dataset.index);
+                    mixingSolvents.splice(idx, 1);
+                    renderMixList();
+                    calculateMixHSP();
+                });
+            });
+            
+            calculateMixHSP();
+        }
+
+        function calculateMixHSP() {
+            if (mixingSolvents.length === 0) {
+                document.getElementById('mix-d').textContent = "0.0";
+                document.getElementById('mix-p').textContent = "0.0";
+                document.getElementById('mix-h').textContent = "0.0";
+                document.getElementById('mix-name-preview').textContent = "Mix Name";
+                saveMixBtn.disabled = true;
+                return;
+            }
+
+            let totalRatio = 0;
+            let sumD = 0, sumP = 0, sumH = 0;
+            
+            // Generate name based on components
+            let nameParts = [];
+
+            mixingSolvents.forEach(item => {
+                totalRatio += item.ratio;
+                sumD += item.solvent.d * item.ratio;
+                sumP += item.solvent.p * item.ratio;
+                sumH += item.solvent.h * item.ratio;
+                
+                // Simplified name generation
+                if (item.ratio > 0) {
+                    nameParts.push(`${item.solvent.name.substring(0, 4)}`);
+                }
+            });
+
+            if (totalRatio === 0) return;
+
+            const dMix = sumD / totalRatio;
+            const pMix = sumP / totalRatio;
+            const hMix = sumH / totalRatio;
+
+            document.getElementById('mix-d').textContent = dMix.toFixed(1);
+            document.getElementById('mix-p').textContent = pMix.toFixed(1);
+            document.getElementById('mix-h').textContent = hMix.toFixed(1);
+            
+            // Percentage based name
+            const mixName = "Mix: " + mixingSolvents.map(m => {
+                const pct = Math.round((m.ratio / totalRatio) * 100);
+                return `${m.solvent.name}(${pct}%)`;
+            }).join('/');
+            
+            document.getElementById('mix-name-preview').textContent = mixName;
+            document.getElementById('mix-name-preview').title = mixName; // Tooltip for full name
+            
+            saveMixBtn.disabled = false;
+            
+            return { name: mixName, d: dMix, p: pMix, h: hMix };
+        }
+
+        toggleMixPanelBtn.addEventListener('click', toggleMixPanel);
+        
+        addToMixBtn.addEventListener('click', () => {
+            const selectedName = mixSelector.value;
+            if (!selectedName) return;
+            
+            const solvent = solventDatabase.find(s => s.name === selectedName);
+            if (solvent) {
+                // Default ratio 1 (or 50 if it's the second one etc)
+                mixingSolvents.push({ solvent: solvent, ratio: 50 });
+                renderMixList();
+                // Reset selector
+                mixSelector.value = "";
+            }
+        });
+
+        saveMixBtn.addEventListener('click', () => {
+            const result = calculateMixHSP();
+            if (result) {
+                // Check dupes
+                if (solventDatabase.some(s => s.name === result.name)) {
+                    if (!confirm("同じ名前の混合溶媒が存在します。上書きしますか？")) return;
+                    const idx = solventDatabase.findIndex(s => s.name === result.name);
+                    solventDatabase[idx] = { ...solventDatabase[idx], ...result };
+                } else {
+                    solventDatabase.push({
+                        name: result.name,
+                        d: parseFloat(result.d.toFixed(1)),
+                        p: parseFloat(result.p.toFixed(1)),
+                        h: parseFloat(result.h.toFixed(1)),
+                        type: 'mix',
+                        isCustom: true,
+                        visible: true
+                    });
+                }
+                updateSimulation();
+                
+                // Clear Mix Panel? Optional. Let's keep it for adjustments.
+                alert(`混合溶媒 "${result.name}" をリストに追加しました`);
+            }
+        });
+
+
+        // --- Existing Logic ... ---
+
+        const calcModeBtn = document.getElementById('calc-mode-btn');
+        const calcActionPanel = document.getElementById('calc-action-panel');
+        const listHeaderText = document.getElementById('list-header-text');
+
+        calcModeBtn.addEventListener('click', () => {
+            state.isCalculationMode = !state.isCalculationMode;
+            
+            if (state.isCalculationMode) {
+                calcModeBtn.classList.remove('bg-purple-700', 'hover:bg-purple-600');
+                calcModeBtn.classList.add('bg-purple-500', 'hover:bg-purple-400', 'ring-2', 'ring-white');
+                calcActionPanel.classList.remove('hidden');
+                listHeaderText.textContent = '良溶媒を選択';
+                
+                const notif = document.getElementById('notification');
+                notif.innerText = "計算モード: 溶ける物質を選択してください";
+                notif.classList.remove('hidden', 'opacity-0', 'bg-green-600');
+                notif.classList.add('bg-purple-600');
+                setTimeout(() => {
+                    notif.classList.add('opacity-0');
+                    setTimeout(() => notif.classList.add('hidden'), 500);
+                }, 2500);
+
+            } else {
+                calcModeBtn.classList.add('bg-purple-700', 'hover:bg-purple-600');
+                calcModeBtn.classList.remove('bg-purple-500', 'hover:bg-purple-400', 'ring-2', 'ring-white');
+                calcActionPanel.classList.add('hidden');
+                listHeaderText.textContent = 'リスト';
+            }
+            updateUIList();
+        });
+
+        function toggleCalcSelection(name, isChecked) {
+            const solvent = solventDatabase.find(s => s.name === name);
+            if (solvent) {
+                solvent.selectedForCalc = isChecked;
+            }
+        }
+
+        document.getElementById('clear-checks-btn').addEventListener('click', () => {
+            solventDatabase.forEach(s => s.selectedForCalc = false);
+            updateUIList();
+        });
+
+        // 計算実行ロジック
+        document.getElementById('execute-calc-btn').addEventListener('click', () => {
+            const selectedSolvents = solventDatabase.filter(s => s.selectedForCalc);
+            
+            if (selectedSolvents.length < 1) {
+                alert("計算するには、少なくとも1つの良溶媒を選択してください。");
+                return;
+            }
+
+            // 1. 重心を計算
+            let sumD = 0, sumP = 0, sumH = 0;
+            selectedSolvents.forEach(s => {
+                sumD += s.d;
+                sumP += s.p;
+                sumH += s.h;
+            });
+            
+            const centerD = sumD / selectedSolvents.length;
+            const centerP = sumP / selectedSolvents.length;
+            const centerH = sumH / selectedSolvents.length;
+
+            // 2. 半径を計算 (重心から最も遠い良溶媒までの距離)
+            let maxRa = 0;
+            selectedSolvents.forEach(s => {
+                const dDiff = s.d - centerD;
+                const pDiff = s.p - centerP;
+                const hDiff = s.h - centerH;
+                const ra2 = 4 * (dDiff * dDiff) + (pDiff * pDiff) + (hDiff * hDiff);
+                const ra = Math.sqrt(ra2);
+                if (ra > maxRa) maxRa = ra;
+            });
+
+            setTarget(centerD, centerP, centerH);
+            
+            const t = state.targets[state.activeTargetIndex];
+            t.r = maxRa;
+            document.getElementById('input-r').value = maxRa;
+            document.getElementById('val-r').textContent = maxRa.toFixed(1);
+            
+            updateSimulation();
+
+            const notif = document.getElementById('notification');
+            notif.innerText = `計算完了: R0=${maxRa.toFixed(2)}`;
+            notif.classList.remove('hidden', 'opacity-0', 'bg-purple-600');
+            notif.classList.add('bg-green-600');
+            setTimeout(() => {
+                notif.classList.add('opacity-0');
+                setTimeout(() => notif.classList.add('hidden'), 500);
+            }, 3000);
+        });
+
+
+        function toggleVisibility(name) {
+            const solvent = solventDatabase.find(s => s.name === name);
+            if (solvent) {
+                solvent.visible = !solvent.visible;
+                updateSimulation();
+            }
+        }
+        
+        function removeSolvent(name) {
+            const index = solventDatabase.findIndex(s => s.name === name);
+            if (index > -1) {
+                solventDatabase.splice(index, 1);
+                updateSimulation();
+                // Update mix selector in case removed solvent was there
+                updateMixSelector();
+            }
+        }
+
+        function addCustomSolvent() {
+            const nameInput = document.getElementById('new-name');
+            const dInput = document.getElementById('new-d');
+            const pInput = document.getElementById('new-p');
+            const hInput = document.getElementById('new-h');
+
+            const name = nameInput.value.trim();
+            const d = parseFloat(dInput.value);
+            const p = parseFloat(pInput.value);
+            const h = parseFloat(hInput.value);
+
+            if (!name) {
+                alert("成分名を入力してください");
+                return;
+            }
+            if (isNaN(d) || isNaN(p) || isNaN(h)) {
+                alert("HSP値 (d, p, h) をすべて数値で入力してください");
+                return;
+            }
+
+            if (solventDatabase.some(s => s.name === name)) {
+                alert("同じ名前の成分が既に存在します");
+                return;
+            }
+
+            solventDatabase.push({
+                name: name,
+                d: d,
+                p: p,
+                h: h,
+                type: 'custom',
+                isCustom: true,
+                visible: true,
+                selectedForCalc: false
+            });
+
+            nameInput.value = '';
+            dInput.value = '';
+            pInput.value = '';
+            hInput.value = '';
+            
+            updateSimulation();
+            updateMixSelector();
+        }
+
+        const toggleAddPanelBtn = document.getElementById('toggle-add-panel-btn');
+        const addPanel = document.getElementById('add-panel');
+        const addPanelArrow = document.getElementById('add-panel-arrow');
+        let isAddPanelOpen = false;
+
+        function toggleAddPanel() {
+            isAddPanelOpen = !isAddPanelOpen;
+            if (isAddPanelOpen) {
+                addPanel.classList.remove('hidden');
+                addPanelArrow.classList.add('rotate-180');
+            } else {
+                addPanel.classList.add('hidden');
+                addPanelArrow.classList.remove('rotate-180');
+            }
+        }
+        toggleAddPanelBtn.addEventListener('click', toggleAddPanel);
+        document.getElementById('add-solvent-btn').addEventListener('click', addCustomSolvent);
+
+        const toggleAllBtn = document.getElementById('toggle-all-visible');
+        toggleAllBtn.addEventListener('click', () => {
+            const anyHidden = solventDatabase.some(s => !s.visible);
+            solventDatabase.forEach(s => {
+                s.visible = anyHidden;
+            });
+            const icon = toggleAllBtn.querySelector('i');
+            if (anyHidden) {
+                icon.className = 'fa-solid fa-eye';
+            } else {
+                icon.className = 'fa-solid fa-eye-slash';
+            }
+            updateSimulation();
+        });
+
+        // ボタンのイベントリスナー
+        document.getElementById('save-btn').addEventListener('click', saveSettings);
+        document.getElementById('reset-btn').addEventListener('click', resetSettings);
+        document.getElementById('export-file-btn').addEventListener('click', exportSettingsToFile);
+        document.getElementById('import-file-btn').addEventListener('click', importSettingsFromFile);
+
+        function setTarget(d, p, h) {
+            const idx = state.activeTargetIndex;
+            state.targets[idx].d = d;
+            state.targets[idx].p = p;
+            state.targets[idx].h = h;
+            
+            syncInputsWithState();
+            updateSimulation();
+        }
+
+        function syncInputsWithState() {
+            const t = state.targets[state.activeTargetIndex];
+            document.getElementById('input-d').value = t.d;
+            document.getElementById('input-p').value = t.p;
+            document.getElementById('input-h').value = t.h;
+            document.getElementById('input-r').value = t.r;
+            document.getElementById('val-r').textContent = t.r.toFixed(1);
+        }
+
+        function switchTab(index, update = true) {
+            state.activeTargetIndex = index;
+            
+            const btn1 = document.getElementById('tab-target1');
+            const btn2 = document.getElementById('tab-target2');
+            
+            if (index === 0) {
+                btn1.className = "flex-1 py-1.5 text-center bg-gray-800 text-blue-400 border-b-2 border-blue-500 transition-colors";
+                btn2.className = "flex-1 py-1.5 text-center bg-gray-700 text-gray-400 border-b-2 border-transparent hover:bg-gray-600 transition-colors flex items-center justify-center";
+            } else {
+                btn1.className = "flex-1 py-1.5 text-center bg-gray-700 text-gray-400 border-b-2 border-transparent hover:bg-gray-600 transition-colors";
+                btn2.className = "flex-1 py-1.5 text-center bg-gray-800 text-orange-400 border-b-2 border-orange-500 transition-colors flex items-center justify-center";
+            }
+            
+            syncInputsWithState();
+            if (update) updateSimulation(); 
+        }
+
+        document.getElementById('tab-target1').addEventListener('click', () => switchTab(0));
+        document.getElementById('tab-target2').addEventListener('click', () => switchTab(1));
+
+        function handleInput(key, value) {
+            const val = parseFloat(value);
+            if (isNaN(val)) return;
+            state.targets[state.activeTargetIndex][key] = val;
+            
+            if (key === 'r') {
+                document.getElementById('val-r').textContent = val.toFixed(1);
+            }
+            updateSimulation();
+        }
+
+        document.getElementById('input-d').addEventListener('input', (e) => handleInput('d', e.target.value));
+        document.getElementById('input-p').addEventListener('input', (e) => handleInput('p', e.target.value));
+        document.getElementById('input-h').addEventListener('input', (e) => handleInput('h', e.target.value));
+        document.getElementById('input-r').addEventListener('input', (e) => handleInput('r', e.target.value));
+
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('sidebar-toggle');
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+        });
+
+        const toggleControlsBtn = document.getElementById('toggle-controls-btn');
+        const controlsPanel = document.getElementById('controls-panel');
+        let isControlsOpen = true;
+        toggleControlsBtn.addEventListener('click', () => {
+            isControlsOpen = !isControlsOpen;
+            if (isControlsOpen) {
+                controlsPanel.style.maxHeight = '500px';
+                toggleControlsBtn.innerHTML = '<i class="fa-solid fa-sliders me-1"></i>設定';
+            } else {
+                controlsPanel.style.maxHeight = '0px';
+                toggleControlsBtn.innerHTML = '<i class="fa-solid fa-sliders me-1"></i>表示';
+            }
+        });
+
+        // About Modal Logic
+        const aboutBtn = document.getElementById('about-btn');
+        const closeAboutBtn = document.getElementById('close-about-btn');
+        const aboutModal = document.getElementById('about-modal');
+
+        function toggleAboutModal(show) {
+            if (show) {
+                aboutModal.classList.remove('hidden');
+                // Small delay to allow CSS transition if added later, currently instant toggle
+            } else {
+                aboutModal.classList.add('hidden');
+            }
+        }
+
+        aboutBtn.addEventListener('click', () => toggleAboutModal(true));
+        closeAboutBtn.addEventListener('click', () => toggleAboutModal(false));
+        // Close on outside click
+        aboutModal.addEventListener('click', (e) => {
+            if (e.target === aboutModal) {
+                toggleAboutModal(false);
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Mouse Move Event for Raycasting (Tooltip)
+        // Attach to the container to avoid interference with the sidebar
+        const container = document.getElementById('canvas-container');
+        container.addEventListener('pointermove', onMouseMove);
+
+        function onMouseMove(event) {
+            // ツールチップ要素
+            const tooltip = document.getElementById('tooltip');
+            
+            // マウス位置の正規化 (-1 to +1)
+            // canvas-container is full screen, so clientX/Y work directly
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            // レイキャスト実行
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(solventMeshes);
+
+            if (intersects.length > 0) {
+                const s = intersects[0].object.userData;
+                if (!s) return;
+
+                // テキストカラーの決定
+                const t1Class = s.red1 <= 1.0 ? 'text-blue-400 font-bold' : 'text-gray-400';
+                const t2Class = s.red2 <= 1.0 ? 'text-orange-400 font-bold' : 'text-gray-400';
+
+                // ツールチップの内容生成
+                tooltip.innerHTML = `
+                    <div class="font-bold text-sm border-b border-gray-500 pb-1 mb-1 text-white truncate">${s.name}</div>
+                    <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] font-mono mb-1">
+                        <span class="text-blue-300">δd:</span> <span>${s.d.toFixed(1)}</span>
+                        <span class="text-green-300">δp:</span> <span>${s.p.toFixed(1)}</span>
+                        <span class="text-red-300">δh:</span> <span>${s.h.toFixed(1)}</span>
+                    </div>
+                    <div class="pt-1 border-t border-gray-600 grid grid-cols-2 gap-2 text-[10px]">
+                        <div>RED1: <span class="${t1Class}">${s.red1.toFixed(2)}</span></div>
+                        <div>RED2: <span class="${t2Class}">${s.red2.toFixed(2)}</span></div>
+                    </div>
+                `;
+
+                // ツールチップの位置調整
+                let left = event.clientX + 15;
+                let top = event.clientY + 15;
+                
+                // 画面からはみ出さないように調整
+                if (left + 180 > window.innerWidth) left = event.clientX - 190;
+                if (top + 140 > window.innerHeight) top = event.clientY - 150;
+
+                tooltip.style.left = `${left}px`;
+                tooltip.style.top = `${top}px`;
+                tooltip.classList.remove('hidden');
+                
+                document.body.style.cursor = 'pointer';
+            } else {
+                tooltip.classList.add('hidden');
+                document.body.style.cursor = 'default';
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = initThree;
+
+    </script>
+</body>
+</html>

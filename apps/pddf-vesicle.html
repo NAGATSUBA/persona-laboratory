@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>対距離分布関数 p(r) - 脂質二重膜ベシクルモデル (コントラスト有り)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .canvas-container, .graph-container {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative; /* For legend */
+        }
+        canvas {
+            background-color: #fdfdfd;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        h1, h2 {
+            color: #00796b;
+            margin-top: 0;
+        }
+        p { margin-top: 0; text-align: center; max-width: 800px; }
+        .controls {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 15px 25px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+        }
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 10px 0;
+        }
+        .slider-group label { font-weight: bold; width: 180px; }
+        .slider-group input[type="range"] { flex-grow: 1; cursor: pointer; }
+        .slider-group span { min-width: 40px; text-align: right; font-family: monospace; }
+        .legend {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            border: 1px solid #eee;
+        }
+        .legend div { display: flex; align-items: center; margin-bottom: 2px; }
+        .legend-color { width: 12px; height: 12px; margin-right: 5px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>対距離分布関数 p(r) - 脂質二重膜ベシクルモデル (コントラスト有り)</h1>
+    <p>ご指摘を反映し、p(r)関数の内訳（各成分の寄与）を再度表示するようにしました。各成分のコントラストの積が、全体のp(r)関数（太い赤線）をどのように形成するか観察してみましょう。</p>
+
+    <div class="container">
+        <div class="canvas-container">
+            <h2>ベシクル構造 (断面図)</h2>
+            <canvas id="vesicleCanvas" width="400" height="400"></canvas>
+        </div>
+        <div class="graph-container">
+            <h2>対距離分布関数 p(r)</h2>
+            <canvas id="graphCanvas" width="400" height="400"></canvas>
+            <div class="legend">
+                <div><div class="legend-color" style="background-color: #03a9f4;"></div>親水 - 親水</div>
+                <div><div class="legend-color" style="background-color: #ffc107;"></div>疎水 - 疎水</div>
+                <div><div class="legend-color" style="background-color: #4caf50;"></div>親水 - 疎水</div>
+                <div><div class="legend-color" style="background-color: #e91e63; border: 2px solid #e91e63;"></div>合計 p(r)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="slider-group">
+            <label for="totalRadius">全体の半径:</label>
+            <input type="range" id="totalRadius" min="50" max="180" value="120">
+            <span id="totalRadiusValue">120</span>
+        </div>
+        <div class="slider-group">
+            <label for="membraneThickness">膜の総厚:</label>
+            <input type="range" id="membraneThickness" min="10" max="100" value="50">
+            <span id="membraneThicknessValue">50</span>
+        </div>
+        <div class="slider-group">
+            <label for="hydrophobicThickness">疎水層(黄色)の厚さ:</label>
+            <input type="range" id="hydrophobicThickness" min="4" max="100" value="20">
+            <span id="hydrophobicThicknessValue">20</span>
+        </div>
+        <div class="slider-group">
+            <label for="hydrophobicContrast">疎水層の散乱コントラスト:</label>
+            <input type="range" id="hydrophobicContrast" min="-2" max="2" value="-0.5" step="0.1">
+            <span id="hydrophobicContrastValue">-0.5</span>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM要素 ---
+        const vesicleCanvas = document.getElementById('vesicleCanvas');
+        const vesicleCtx = vesicleCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        const totalRadiusSlider = document.getElementById('totalRadius');
+        const thicknessSlider = document.getElementById('membraneThickness');
+        const hydrophobicSlider = document.getElementById('hydrophobicThickness');
+        const contrastSlider = document.getElementById('hydrophobicContrast');
+        const totalRadiusValue = document.getElementById('totalRadiusValue');
+        const thicknessValue = document.getElementById('membraneThicknessValue');
+        const hydrophobicValue = document.getElementById('hydrophobicThicknessValue');
+        const contrastValue = document.getElementById('hydrophobicContrastValue');
+
+        const PARTICLE_DENSITY = 0.08;
+
+        // --- メインの更新関数 ---
+        function update() {
+            let totalR = parseInt(totalRadiusSlider.value);
+            let totalThickness = parseInt(thicknessSlider.value);
+            let hydrophobicThickness = parseInt(hydrophobicSlider.value);
+            let hydrophobicContrast = parseFloat(contrastSlider.value);
+
+            if (totalThickness > totalR) {
+                totalThickness = totalR;
+                thicknessSlider.value = totalThickness;
+            }
+            if (hydrophobicThickness > totalThickness) {
+                hydrophobicThickness = totalThickness;
+                hydrophobicSlider.value = hydrophobicThickness;
+            }
+            thicknessSlider.max = totalR;
+            hydrophobicSlider.max = totalThickness;
+            
+            totalRadiusValue.textContent = totalR;
+            thicknessValue.textContent = totalThickness;
+            hydrophobicValue.textContent = hydrophobicThickness;
+            contrastValue.textContent = hydrophobicContrast.toFixed(1);
+
+            const hydrophilicThickness = (totalThickness - hydrophobicThickness) / 2.0;
+
+            const points = generateVesicle(totalR, hydrophilicThickness, hydrophobicThickness, hydrophobicContrast);
+            const p_r_components = calculatePDDF(points, totalR * 2);
+            
+            drawVesicle(totalR, hydrophilicThickness, hydrophobicThickness);
+            drawGraph(p_r_components, totalR * 2);
+        }
+
+        // --- ベシクルモデルの点群を生成 ---
+        function generateVesicle(totalRadius, hydrophilicThickness, hydrophobicThickness, hydrophobicContrast) {
+            const points = [];
+            const totalThickness = hydrophilicThickness * 2 + hydrophobicThickness;
+            const innerRadius = totalRadius - totalThickness;
+            const shellArea = Math.PI * (totalRadius**2 - innerRadius**2);
+            const numPoints = Math.floor(shellArea * PARTICLE_DENSITY);
+
+            const outerHydrophobicBoundary = totalRadius - hydrophilicThickness;
+            const innerHydrophobicBoundary = outerHydrophobicBoundary - hydrophobicThickness;
+            const contrast_hydrophilic = 1.0;
+
+            for (let i = 0; i < numPoints; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const r = Math.sqrt(Math.random() * (totalRadius**2 - innerRadius**2) + innerRadius**2);
+                
+                let isHydrophobic = (r < outerHydrophobicBoundary && r >= innerHydrophobicBoundary);
+
+                points.push({
+                    x: r * Math.cos(angle),
+                    y: r * Math.sin(angle),
+                    type: isHydrophobic ? 'hydrophobic' : 'hydrophilic',
+                    contrast: isHydrophobic ? hydrophobicContrast : contrast_hydrophilic
+                });
+            }
+            return points;
+        }
+        
+        // --- p(r)関数を計算 ---
+        function calculatePDDF(points, d_max) {
+            const binSize = 2;
+            const numBins = Math.floor(d_max / binSize) + 1;
+            const histograms = {
+                hh: new Array(numBins).fill(0), // hydrophilic-hydrophilic
+                pp: new Array(numBins).fill(0), // hydrophobic-hydrophobic
+                hp: new Array(numBins).fill(0)  // hydrophilic-hydrophobic
+            };
+            if (points.length < 2) return histograms;
+            
+            const sampleSize = 100000;
+            for (let k = 0; k < sampleSize; k++) {
+                const i = Math.floor(Math.random() * points.length);
+                const j = Math.floor(Math.random() * points.length);
+                if (i === j) continue;
+
+                const p1 = points[i];
+                const p2 = points[j];
+                const dist = Math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2);
+
+                if (dist < d_max) {
+                    const binIndex = Math.floor(dist / binSize);
+                    const contribution = p1.contrast * p2.contrast;
+                    
+                    if (p1.type === 'hydrophilic' && p2.type === 'hydrophilic') {
+                        histograms.hh[binIndex] += contribution;
+                    } else if (p1.type === 'hydrophobic' && p2.type === 'hydrophobic') {
+                        histograms.pp[binIndex] += contribution;
+                    } else {
+                        histograms.hp[binIndex] += contribution;
+                    }
+                }
+            }
+            return histograms;
+        }
+
+        // --- ベシクルを描画 ---
+        function drawVesicle(totalRadius, hydrophilicThickness, hydrophobicThickness) {
+            const center = { x: vesicleCanvas.width / 2, y: vesicleCanvas.height / 2 };
+            const totalThickness = hydrophilicThickness * 2 + hydrophobicThickness;
+            const innerRadius = totalRadius - totalThickness;
+            const outerHydrophobicBoundary = totalRadius - hydrophilicThickness;
+            const innerHydrophobicBoundary = outerHydrophobicBoundary - hydrophobicThickness;
+
+            vesicleCtx.clearRect(0, 0, vesicleCanvas.width, vesicleCanvas.height);
+            
+            vesicleCtx.fillStyle = '#03a9f4'; 
+            vesicleCtx.beginPath();
+            vesicleCtx.arc(center.x, center.y, totalRadius, 0, 2 * Math.PI);
+            vesicleCtx.fill();
+
+            vesicleCtx.fillStyle = '#ffc107'; 
+            vesicleCtx.beginPath();
+            vesicleCtx.arc(center.x, center.y, outerHydrophobicBoundary, 0, 2 * Math.PI);
+            vesicleCtx.fill();
+            
+            vesicleCtx.fillStyle = '#03a9f4';
+            vesicleCtx.beginPath();
+            vesicleCtx.arc(center.x, center.y, innerHydrophobicBoundary, 0, 2 * Math.PI);
+            vesicleCtx.fill();
+
+            vesicleCtx.fillStyle = '#fdfdfd';
+            vesicleCtx.beginPath();
+            vesicleCtx.arc(center.x, center.y, innerRadius, 0, 2 * Math.PI);
+            vesicleCtx.fill();
+
+            vesicleCtx.strokeStyle = 'rgba(0,0,0,0.2)';
+            [totalRadius, outerHydrophobicBoundary, innerHydrophobicBoundary, innerRadius].forEach(r => {
+                vesicleCtx.beginPath();
+                vesicleCtx.arc(center.x, center.y, r, 0, 2 * Math.PI);
+                vesicleCtx.stroke();
+            });
+        }
+
+        // --- グラフを描画 ---
+        function drawGraph(p_r_components, d_max) {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            const padding = 40;
+            const chartWidth = graphCanvas.width - padding * 2;
+            const chartHeight = graphCanvas.height - padding * 2;
+            
+            const total_p_r = p_r_components.hh.map((val, i) => val + p_r_components.pp[i] + p_r_components.hp[i]);
+            
+            let all_values = [].concat(p_r_components.hh, p_r_components.pp, p_r_components.hp, total_p_r);
+            const max_p = Math.max(...all_values);
+            const min_p = Math.min(...all_values);
+            const abs_max = Math.max(Math.abs(max_p), Math.abs(min_p));
+            if(abs_max === 0) return;
+
+            // X軸とY軸
+            graphCtx.strokeStyle = '#333';
+            graphCtx.beginPath();
+            graphCtx.moveTo(padding, padding + chartHeight / 2);
+            graphCtx.lineTo(padding + chartWidth, padding + chartHeight / 2); // X軸 (y=0)
+            graphCtx.moveTo(padding, padding);
+            graphCtx.lineTo(padding, padding + chartHeight); // Y軸
+            graphCtx.stroke();
+            
+            // ラベル
+            graphCtx.fillStyle = '#333';
+            graphCtx.textAlign = 'center';
+            graphCtx.fillText("距離 r", padding + chartWidth / 2, padding + chartHeight + 30);
+            graphCtx.save();
+            graphCtx.translate(15, padding + chartHeight / 2);
+            graphCtx.rotate(-Math.PI / 2);
+            graphCtx.fillText("p(r)", 0, 0);
+            graphCtx.restore();
+
+            const plot = (data, color, width = 1.5) => {
+                graphCtx.beginPath();
+                graphCtx.strokeStyle = color;
+                graphCtx.lineWidth = width;
+                data.forEach((value, index) => {
+                    const x = padding + (index * 2 / d_max) * chartWidth;
+                    const y = padding + chartHeight / 2 - (value / abs_max) * (chartHeight / 2);
+                    if (index === 0) graphCtx.moveTo(x, y);
+                    else graphCtx.lineTo(x, y);
+                });
+                graphCtx.stroke();
+            };
+
+            // 各成分を描画
+            plot(p_r_components.hh, '#03a9f4');
+            plot(p_r_components.pp, '#ffc107');
+            plot(p_r_components.hp, '#4caf50');
+
+            // 合計を描画
+            plot(total_p_r, '#e91e63', 3);
+            
+            // Dmax
+            const dmax_x = padding + chartWidth;
+            graphCtx.beginPath();
+            graphCtx.moveTo(dmax_x, padding);
+            graphCtx.lineTo(dmax_x, padding + chartHeight);
+            graphCtx.setLineDash([5, 5]);
+            graphCtx.strokeStyle = '#00796b';
+            graphCtx.stroke();
+            graphCtx.setLineDash([]);
+            graphCtx.fillStyle = '#00796b';
+            graphCtx.fillText(`Dmax ≈ ${Math.round(d_max)}`, dmax_x, padding - 5);
+        }
+
+        // --- イベントリスナー ---
+        totalRadiusSlider.addEventListener('input', update);
+        thicknessSlider.addEventListener('input', update);
+        hydrophobicSlider.addEventListener('input', update);
+        contrastSlider.addEventListener('input', update);
+
+        // --- 初期化 ---
+        update();
+    </script>
+</body>
+</html>
+

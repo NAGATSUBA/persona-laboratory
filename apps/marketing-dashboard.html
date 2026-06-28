@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketing & MBA Metrics Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@1.21.0"></script>
+    <style>
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* アコーディオンの矢印回転アニメーション用 */
+        .rotate-180 { transform: rotate(180deg); }
+        .chevron-icon { transition: transform 0.3s ease; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans min-h-screen flex flex-col md:flex-row">
+
+    <!-- サイドバー -->
+    <aside class="w-full md:w-64 bg-slate-900 text-white flex flex-col shrink-0">
+        <div class="p-6 border-b border-slate-800">
+            <h1 class="text-xl font-black tracking-tight flex items-center gap-2 leading-tight">
+                <i data-lucide="trending-up" class="text-blue-400"></i>
+                <span>Marketing <br/> & MBA Metrics</span>
+            </h1>
+        </div>
+        
+        <nav class="flex-1 p-4 space-y-2" id="nav-menu">
+            <button data-target="mba" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 bg-blue-600 text-white shadow-md">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                <span class="font-medium">MBA Dashboard</span>
+            </button>
+            <button data-target="aarrr" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+                <i data-lucide="filter" class="w-5 h-5"></i>
+                <span class="font-medium">AARRR Metrics</span>
+            </button>
+            <button data-target="all" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+                <i data-lucide="book-open" class="w-5 h-5"></i>
+                <span class="font-medium">All Metrics Dictionary</span>
+            </button>
+        </nav>
+        
+        <div class="p-4 text-xs text-slate-500 border-t border-slate-800">
+            Marketing Metrics Tool v1.0 (HTML)
+        </div>
+    </aside>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto h-screen">
+        <div class="max-w-6xl mx-auto relative">
+
+            <!-- =====================
+                 MBA Dashboard 
+            ====================== -->
+            <div id="tab-mba" class="tab-content block animate-fade-in space-y-6">
+                <div class="bg-gradient-to-r from-indigo-800 to-blue-900 rounded-2xl p-6 md:p-8 text-white shadow-xl">
+                    <h2 class="text-3xl font-bold mb-2 flex items-center gap-3">
+                        <i data-lucide="layout-dashboard" class="w-8 h-8 text-blue-300"></i>
+                        MBA最重要公式 ダッシュボード
+                    </h2>
+                    <p class="text-blue-200">ビジネスの健全性を測るユニットエコノミクス（LTV / CAC）をリアルタイムに計算・判定します。</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- LTV Card -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">① 顧客生涯価値 (LTV)</h3>
+                        <p class="text-sm text-gray-500 mb-6 font-mono bg-gray-50 p-2 rounded">LTV = Average Order Value × Purchase Frequency × Customer Lifespan</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Average Order Value (平均注文額)</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">¥</span>
+                                    <input type="number" id="mba-aov" class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg" placeholder="0">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Frequency (購入頻度/年)</label>
+                                    <input type="number" id="mba-freq" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-lg" placeholder="0">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Lifespan (継続年数)</label>
+                                    <input type="number" id="mba-lifespan" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-lg" placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-6 p-4 bg-indigo-50 rounded-xl flex justify-between items-center">
+                            <span class="font-bold text-indigo-900">LTV 計算結果</span>
+                            <span class="text-3xl font-black text-indigo-600" id="ltv-result">¥ 0</span>
+                        </div>
+                    </div>
+
+                    <!-- CAC Card -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">② 顧客獲得コスト (CAC)</h3>
+                        <p class="text-sm text-gray-500 mb-6 font-mono bg-gray-50 p-2 rounded">CAC = Marketing Cost ÷ New Customers</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Marketing Cost (総マーケティング費用)</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">¥</span>
+                                    <input type="number" id="mba-mktCost" class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg" placeholder="0">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">New Customers (新規獲得顧客数)</label>
+                                <input type="number" id="mba-newCust" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-lg" placeholder="0">
+                            </div>
+                        </div>
+                        <div class="mt-6 p-4 bg-rose-50 rounded-xl flex justify-between items-center h-[76px]">
+                            <span class="font-bold text-rose-900">CAC 計算結果</span>
+                            <span class="text-3xl font-black text-rose-600" id="cac-result">¥ 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Unit Economics Card -->
+                <div id="unit-economics-card" class="bg-white border-gray-200 rounded-2xl shadow-lg border-2 p-8 transition-colors duration-500">
+                    <div class="text-center mb-6">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">③ ユニットエコノミクス (LTV / CAC)</h3>
+                        <p class="text-gray-600">ビジネス成立条件: <span class="font-bold">LTV / CAC ≥ 3</span></p>
+                    </div>
+                    
+                    <div class="flex flex-col md:flex-row items-center justify-center gap-8">
+                        <div class="text-center">
+                            <span class="block text-sm text-gray-500 mb-1">現在の比率</span>
+                            <span id="ratio-result" class="text-6xl font-black text-gray-400">-</span>
+                        </div>
+                        <div id="status-container" class="flex items-center gap-4">
+                            <!-- JSで結果アラートを挿入 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =====================
+                 AARRR Metrics 
+            ====================== -->
+            <div id="tab-aarrr" class="tab-content hidden animate-fade-in space-y-6">
+                <div class="bg-slate-900 rounded-2xl p-6 md:p-8 text-white shadow-xl bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+                    <h2 class="text-3xl font-bold mb-2 flex items-center gap-3">
+                        <i data-lucide="filter" class="w-8 h-8 text-rose-400"></i>
+                        AARRRモデル (海賊指標) ダッシュボード
+                    </h2>
+                    <p class="text-slate-300">プロダクトの成長フェーズを5つのステップに分解し、ファネルのどこに課題があるかを特定します。</p>
+                </div>
+
+                <div id="aarrr-container" class="flex flex-col items-center space-y-2 py-4">
+                    <!-- JSでファネルを生成します -->
+                </div>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 mt-8">
+                    <h4 class="font-bold text-blue-900 flex items-center gap-2 mb-2">
+                        <i data-lucide="book-open" class="w-5 h-5"></i>
+                        AARRR運用のポイント
+                    </h4>
+                    <p class="text-blue-800 text-sm leading-relaxed">
+                        マーケティングは単なる指標の羅列ではなく、このAARRRのファネルを通して全体の流れを管理することがMBAレベルの実務において重要です。上のステップから順番に改善するのではなく、まずは<strong>「Retention（継続）」</strong>から固め、穴の空いたバケツを塞ぐことがグロースの鉄則とされています。各指標の具体的な計算は「All Metrics Dictionary」タブから行えます。
+                    </p>
+                </div>
+            </div>
+
+            <!-- =====================
+                 All Metrics Dictionary
+            ====================== -->
+            <div id="tab-all" class="tab-content hidden animate-fade-in space-y-6">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2 flex items-center gap-3">
+                        <i data-lucide="calculator" class="w-8 h-8 text-blue-600"></i>
+                        すべての指標計算機
+                    </h2>
+                    <p class="text-gray-600">8つのカテゴリに分類されたすべてのマーケティング指標を計算できます。カテゴリを開いて数値を入力してください。</p>
+                </div>
+                
+                <div id="all-metrics-container" class="space-y-2">
+                    <!-- JSでアコーディオンと計算機を生成します -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // --- データ定義 ---
+        const metricsData = [
+            { id: 'awareness', title: '① Awareness（認知指標）', icon: 'activity', metrics: [
+                { id: 'freq', name: 'Frequency', jpName: '接触頻度', formulaStr: '表示回数 ÷ リーチ人数', inputs: [{key: 'imp', label: '表示回数'}, {key: 'reach', label: 'リーチ人数'}], calc: v => v.imp / v.reach, format: 'number', unit: '回' },
+                { id: 'sov', name: 'SOV', jpName: '広告シェア', formulaStr: '自社広告 ÷ 市場広告', inputs: [{key: 'own', label: '自社広告量'}, {key: 'market', label: '市場広告量'}], calc: v => v.own / v.market, format: 'percent' },
+                { id: 'som', name: 'SOM', jpName: '市場シェア', formulaStr: '自社売上 ÷ 市場売上', inputs: [{key: 'own', label: '自社売上'}, {key: 'market', label: '市場売上'}], calc: v => v.own / v.market, format: 'percent' },
+                { id: 'bab', name: 'Brand Awareness', jpName: 'ブランド認知率', formulaStr: '認知者 ÷ 調査人数', inputs: [{key: 'known', label: '認知者数'}, {key: 'total', label: '調査人数'}], calc: v => v.known / v.total, format: 'percent' },
+                { id: 'tom', name: 'Top Of Mind', jpName: '第一想起率', formulaStr: '第一回答 ÷ 調査人数', inputs: [{key: 'first', label: '第一回答数'}, {key: 'total', label: '調査人数'}], calc: v => v.first / v.total, format: 'percent' },
+                { id: 'sos', name: 'Share of Search', jpName: '検索シェア', formulaStr: 'ブランド検索 ÷ 全検索', inputs: [{key: 'brand', label: 'ブランド検索数'}, {key: 'total', label: '全検索数'}], calc: v => v.brand / v.total, format: 'percent' }
+            ]},
+            { id: 'acquisition', title: '② Acquisition（顧客獲得）', icon: 'users', metrics: [
+                { id: 'ctr', name: 'CTR', jpName: 'クリック率', formulaStr: 'クリック数 ÷ 表示回数', inputs: [{key: 'click', label: 'クリック数'}, {key: 'imp', label: '表示回数'}], calc: v => v.click / v.imp, format: 'percent' },
+                { id: 'cpc', name: 'CPC', jpName: 'クリック単価', formulaStr: '広告費 ÷ クリック数', inputs: [{key: 'cost', label: '広告費'}, {key: 'click', label: 'クリック数'}], calc: v => v.cost / v.click, format: 'currency' },
+                { id: 'cpm', name: 'CPM', jpName: '1000表示単価', formulaStr: '広告費 ÷ (表示回数/1000)', inputs: [{key: 'cost', label: '広告費'}, {key: 'imp', label: '表示回数'}], calc: v => v.cost / (v.imp / 1000), format: 'currency' },
+                { id: 'cpa', name: 'CPA', jpName: '顧客獲得単価', formulaStr: '広告費 ÷ 顧客数', inputs: [{key: 'cost', label: '広告費'}, {key: 'cust', label: '顧客数'}], calc: v => v.cost / v.cust, format: 'currency' },
+                { id: 'cac', name: 'CAC', jpName: '顧客獲得コスト', formulaStr: 'マーケ費 ÷ 新規顧客', inputs: [{key: 'cost', label: 'マーケ費'}, {key: 'cust', label: '新規顧客数'}], calc: v => v.cost / v.cust, format: 'currency' },
+                { id: 'cpl', name: 'CPL', jpName: 'リード獲得単価', formulaStr: '広告費 ÷ リード数', inputs: [{key: 'cost', label: '広告費'}, {key: 'lead', label: 'リード数'}], calc: v => v.cost / v.lead, format: 'currency' }
+            ]},
+            { id: 'engagement', title: '③ Engagement（エンゲージメント）', icon: 'percent', metrics: [
+                { id: 'er', name: 'Engagement Rate', jpName: '反応率', formulaStr: '反応数 ÷ フォロワー数', inputs: [{key: 'eng', label: '反応数(いいね等)'}, {key: 'followers', label: 'フォロワー数'}], calc: v => v.eng / v.followers, format: 'percent' },
+                { id: 'br', name: 'Bounce Rate', jpName: '直帰率', formulaStr: '直帰数 ÷ セッション数', inputs: [{key: 'bounce', label: '直帰数'}, {key: 'session', label: 'セッション数'}], calc: v => v.bounce / v.session, format: 'percent' },
+                { id: 'asd', name: 'Avg Session Duration', jpName: '平均滞在時間', formulaStr: '総滞在時間 ÷ セッション数', inputs: [{key: 'time', label: '総滞在時間(秒)'}, {key: 'session', label: 'セッション数'}], calc: v => v.time / v.session, format: 'number', unit: '秒' },
+                { id: 'pps', name: 'Pages Per Session', jpName: '回遊度', formulaStr: 'PV ÷ セッション数', inputs: [{key: 'pv', label: 'PV数'}, {key: 'session', label: 'セッション数'}], calc: v => v.pv / v.session, format: 'number', unit: 'ページ' }
+            ]},
+            { id: 'conversion', title: '④ Conversion（転換）', icon: 'trending-up', metrics: [
+                { id: 'cvr', name: 'CVR', jpName: '転換率', formulaStr: 'CV ÷ 訪問数', inputs: [{key: 'cv', label: 'CV数'}, {key: 'visit', label: '訪問数'}], calc: v => v.cv / v.visit, format: 'percent' },
+                { id: 'car', name: 'Cart Abandonment Rate', jpName: 'カート放棄率', formulaStr: '(カート − 購入) ÷ カート', inputs: [{key: 'cart', label: 'カート追加数'}, {key: 'buy', label: '購入数'}], calc: v => (v.cart - v.buy) / v.cart, format: 'percent' },
+                { id: 'lead_rate', name: 'Lead Conversion Rate', jpName: 'リード率', formulaStr: 'リード ÷ 訪問数', inputs: [{key: 'lead', label: 'リード数'}, {key: 'visit', label: '訪問数'}], calc: v => v.lead / v.visit, format: 'percent' },
+                { id: 'act_rate', name: 'Activation Rate', jpName: '利用開始率', formulaStr: 'アクティベーション ÷ 登録', inputs: [{key: 'act', label: 'アクティベーション数'}, {key: 'reg', label: '登録数'}], calc: v => v.act / v.reg, format: 'percent' }
+            ]},
+            { id: 'monetization', title: '⑤ Monetization（収益）', icon: 'dollar-sign', metrics: [
+                { id: 'ltv', name: 'LTV / CLV', jpName: '顧客生涯価値', formulaStr: '平均購入額 × 頻度 × 期間', inputs: [{key: 'aov', label: '平均購入額'}, {key: 'freq', label: '購入頻度(回/年等)'}, {key: 'life', label: '継続期間'}], calc: v => v.aov * v.freq * v.life, format: 'currency' },
+                { id: 'arpu', name: 'ARPU', jpName: 'ユーザー平均売上', formulaStr: '売上 ÷ ユーザー数', inputs: [{key: 'rev', label: '総売上'}, {key: 'users', label: 'ユーザー数'}], calc: v => v.rev / v.users, format: 'currency' },
+                { id: 'arppu', name: 'ARPPU', jpName: '課金ユーザー売上', formulaStr: '売上 ÷ 課金ユーザー数', inputs: [{key: 'rev', label: '総売上'}, {key: 'p_users', label: '課金ユーザー数'}], calc: v => v.rev / v.p_users, format: 'currency' },
+                { id: 'aov', name: 'AOV', jpName: '平均注文額', formulaStr: '売上 ÷ 注文数', inputs: [{key: 'rev', label: '総売上'}, {key: 'orders', label: '注文数'}], calc: v => v.rev / v.orders, format: 'currency' },
+                { id: 'gm', name: 'Gross Margin', jpName: '粗利率', formulaStr: '粗利 ÷ 売上', inputs: [{key: 'profit', label: '粗利益'}, {key: 'rev', label: '総売上'}], calc: v => v.profit / v.rev, format: 'percent' }
+            ]},
+            { id: 'retention', title: '⑥ Retention（継続）', icon: 'refresh-cw', metrics: [
+                { id: 'rr', name: 'Retention Rate', jpName: '継続率', formulaStr: '継続ユーザー ÷ 初期ユーザー', inputs: [{key: 'ret', label: '継続ユーザー数'}, {key: 'init', label: '初期ユーザー数'}], calc: v => v.ret / v.init, format: 'percent' },
+                { id: 'cr', name: 'Churn Rate', jpName: '解約率', formulaStr: '解約数 ÷ 顧客数', inputs: [{key: 'churn', label: '解約数'}, {key: 'cust', label: '顧客数'}], calc: v => v.churn / v.cust, format: 'percent' },
+                { id: 'stick', name: 'Stickiness Ratio', jpName: '依存度', formulaStr: 'DAU ÷ MAU', inputs: [{key: 'dau', label: 'DAU'}, {key: 'mau', label: 'MAU'}], calc: v => v.dau / v.mau, format: 'percent' }
+            ]},
+            { id: 'growth', title: '⑦ Growth（グロース）', icon: 'trending-up', metrics: [
+                { id: 'kfactor', name: 'K-Factor', jpName: '拡散係数', formulaStr: '招待ユーザー ÷ 元ユーザー', inputs: [{key: 'invited', label: '招待獲得ユーザー数'}, {key: 'base', label: '元ユーザー数'}], calc: v => v.invited / v.base, format: 'number', unit: '人' },
+                { id: 'ref_rate', name: 'Referral Rate', jpName: '紹介率', formulaStr: '紹介数 ÷ ユーザー数', inputs: [{key: 'ref', label: '紹介数'}, {key: 'users', label: 'ユーザー数'}], calc: v => v.ref / v.users, format: 'percent' }
+            ]},
+            { id: 'efficiency', title: '⑧ Marketing Efficiency（マーケ効率）', icon: 'calculator', metrics: [
+                { id: 'roas', name: 'ROAS', jpName: '広告費回収率', formulaStr: '売上 ÷ 広告費', inputs: [{key: 'rev', label: '経由売上'}, {key: 'cost', label: '広告費'}], calc: v => v.rev / v.cost, format: 'percent' },
+                { id: 'roi', name: 'ROI', jpName: '投資利益率', formulaStr: '(利益 − 投資) ÷ 投資', inputs: [{key: 'profit', label: '利益額(売上-原価)'}, {key: 'inv', label: '投資額'}], calc: v => (v.profit - v.inv) / v.inv, format: 'percent' },
+                { id: 'mer', name: 'MER', jpName: 'マーケ効率', formulaStr: '総売上 ÷ 総マーケ費', inputs: [{key: 'rev', label: '総売上'}, {key: 'cost', label: '総マーケ費'}], calc: v => v.rev / v.cost, format: 'percent' },
+                { id: 'payback', name: 'CAC Payback Period', jpName: '回収期間', formulaStr: 'CAC ÷ 顧客月次利益', inputs: [{key: 'cac', label: 'CAC'}, {key: 'profit', label: '1顧客の月次利益'}], calc: v => v.cac / v.profit, format: 'number', unit: 'ヶ月' }
+            ]}
+        ];
+
+        const aarrrSteps = [
+            { id: 'acq', letter: 'A', name: 'Acquisition', jp: '獲得', desc: 'ユーザーをどのように見つけるか', color: 'bg-blue-500', metrics: ['CAC', 'CPA', 'CTR'] },
+            { id: 'act', letter: 'A', name: 'Activation', jp: '活性化', desc: '素晴らしい初期体験を提供できているか', color: 'bg-indigo-500', metrics: ['Activation Rate', 'Setup Completion'] },
+            { id: 'ret', letter: 'R', name: 'Retention', jp: '継続', desc: 'ユーザーは戻ってきているか', color: 'bg-purple-500', metrics: ['Retention Rate', 'Churn Rate', 'DAU/MAU'] },
+            { id: 'rev', letter: 'R', name: 'Revenue', jp: '収益', desc: 'どうやって収益化しているか', color: 'bg-pink-500', metrics: ['LTV', 'ARPU', 'Conversion Rate'] },
+            { id: 'ref', letter: 'R', name: 'Referral', jp: '紹介', desc: '他人に勧めてくれているか', color: 'bg-rose-500', metrics: ['K-Factor', 'Referral Rate', 'NPS'] }
+        ];
+
+        // --- ユーティリティ関数 ---
+        const formatValue = (value, format, unit = '') => {
+            if (value === null || value === undefined || isNaN(value) || !isFinite(value)) return '-';
+            if (format === 'percent') {
+                return `${(value * 100).toFixed(2)} %`;
+            } else if (format === 'currency') {
+                return `¥ ${Math.round(value).toLocaleString()}`;
+            } else {
+                return `${Number.isInteger(value) ? value : value.toFixed(2)} ${unit}`;
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 1. タブ切り替えロジック ---
+            const navBtns = document.querySelectorAll('.nav-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            navBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const target = e.currentTarget.dataset.target;
+                    
+                    // NavUI更新
+                    navBtns.forEach(b => {
+                        b.classList.remove('bg-blue-600', 'text-white', 'shadow-md');
+                        b.classList.add('text-slate-400');
+                    });
+                    e.currentTarget.classList.remove('text-slate-400');
+                    e.currentTarget.classList.add('bg-blue-600', 'text-white', 'shadow-md');
+
+                    // Contents更新
+                    tabContents.forEach(content => {
+                        content.classList.add('hidden');
+                        content.classList.remove('block');
+                    });
+                    document.getElementById(`tab-${target}`).classList.remove('hidden');
+                    document.getElementById(`tab-${target}`).classList.add('block');
+                });
+            });
+
+            // --- 2. MBA Dashboard ロジック ---
+            let ltvData = { aov: 0, freq: 0, lifespan: 0 };
+            let cacData = { mktCost: 0, newCust: 0 };
+
+            const updateMBA = () => {
+                const ltv = ltvData.aov * ltvData.freq * ltvData.lifespan;
+                const cac = cacData.newCust > 0 ? cacData.mktCost / cacData.newCust : 0;
+                const ratio = cac > 0 ? ltv / cac : 0;
+                const isHealthy = ratio >= 3;
+
+                document.getElementById('ltv-result').innerText = `¥ ${Math.round(ltv).toLocaleString()}`;
+                document.getElementById('cac-result').innerText = `¥ ${Math.round(cac).toLocaleString()}`;
+                
+                const ratioEl = document.getElementById('ratio-result');
+                const unitCard = document.getElementById('unit-economics-card');
+                const statusContainer = document.getElementById('status-container');
+
+                if (ratio > 0) {
+                    ratioEl.innerHTML = `${ratio.toFixed(2)} <span class="text-2xl font-bold">x</span>`;
+                    
+                    if (isHealthy) {
+                        unitCard.className = 'bg-emerald-50 border-emerald-500 rounded-2xl shadow-lg border-2 p-8 transition-colors duration-500';
+                        ratioEl.className = 'text-6xl font-black text-emerald-600';
+                        statusContainer.innerHTML = `
+                            <div class="flex flex-col items-center text-emerald-600 bg-white p-4 rounded-xl shadow-sm">
+                                <i data-lucide="check-circle-2" class="w-12 h-12 mb-2"></i>
+                                <span class="font-bold text-lg">ビジネス成立（健全）</span>
+                                <span class="text-sm text-emerald-700">LTVがCACの3倍以上あります</span>
+                            </div>
+                        `;
+                    } else {
+                        unitCard.className = 'bg-red-50 border-red-500 rounded-2xl shadow-lg border-2 p-8 transition-colors duration-500';
+                        ratioEl.className = 'text-6xl font-black text-red-600';
+                        statusContainer.innerHTML = `
+                            <div class="flex flex-col items-center text-red-600 bg-white p-4 rounded-xl shadow-sm">
+                                <i data-lucide="alert-circle" class="w-12 h-12 mb-2"></i>
+                                <span class="font-bold text-lg">要改善</span>
+                                <span class="text-sm text-red-700">獲得コストを下げるか、LTVを上げてください</span>
+                            </div>
+                        `;
+                    }
+                    lucide.createIcons(); // 動的生成したアイコンを描画
+                } else {
+                    ratioEl.innerHTML = '-';
+                    unitCard.className = 'bg-white border-gray-200 rounded-2xl shadow-lg border-2 p-8 transition-colors duration-500';
+                    ratioEl.className = 'text-6xl font-black text-gray-400';
+                    statusContainer.innerHTML = '';
+                }
+            };
+
+            ['aov', 'freq', 'lifespan'].forEach(id => {
+                document.getElementById(`mba-${id}`).addEventListener('input', e => {
+                    ltvData[id] = parseFloat(e.target.value) || 0;
+                    updateMBA();
+                });
+            });
+            ['mktCost', 'newCust'].forEach(id => {
+                document.getElementById(`mba-${id}`).addEventListener('input', e => {
+                    cacData[id] = parseFloat(e.target.value) || 0;
+                    updateMBA();
+                });
+            });
+
+
+            // --- 3. AARRR Dashboard のレンダリング ---
+            const aarrrContainer = document.getElementById('aarrr-container');
+            let aarrrHtml = '';
+            aarrrSteps.forEach((step, index) => {
+                const isLast = index === aarrrSteps.length - 1;
+                const widthPercent = 100 - index * 4;
+                const metricsHtml = step.metrics.map(m => `<span class="px-2 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 shadow-sm">${m}</span>`).join('');
+                
+                aarrrHtml += `
+                    <div class="w-full max-w-4xl relative group">
+                        ${!isLast ? `<div class="absolute left-1/2 bottom-0 w-1 h-6 bg-gray-200 translate-y-full z-0 group-hover:bg-gray-300 transition-colors"></div>` : ''}
+                        
+                        <div class="relative z-10 bg-white rounded-2xl shadow-sm hover:shadow-md border border-gray-200 overflow-hidden flex flex-col md:flex-row transition-all duration-300 transform group-hover:scale-[1.01]" style="width: ${widthPercent}%; margin: 0 auto;">
+                            
+                            <div class="${step.color} w-full md:w-32 flex flex-col items-center justify-center p-4 text-white">
+                                <span class="text-5xl font-black opacity-80">${step.letter}</span>
+                            </div>
+                            
+                            <div class="flex-1 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <div>
+                                    <h3 class="text-2xl font-bold text-gray-800 flex items-end gap-2">
+                                        ${step.name} <span class="text-sm font-normal text-gray-500 mb-1">${step.jp}</span>
+                                    </h3>
+                                    <p class="text-gray-600 mt-1">${step.desc}</p>
+                                </div>
+                                
+                                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 min-w-[200px]">
+                                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Key Metrics</span>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${metricsHtml}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            aarrrContainer.innerHTML = aarrrHtml;
+
+
+            // --- 4. All Metrics Dictionary のレンダリング ---
+            const allContainer = document.getElementById('all-metrics-container');
+            let metricsHtml = '';
+
+            metricsData.forEach((category, cIdx) => {
+                metricsHtml += `
+                <div class="mb-4">
+                    <button class="accordion-btn w-full flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors" data-target="cat-${cIdx}">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                                <i data-lucide="${category.icon}"></i>
+                            </div>
+                            <h3 class="font-bold text-lg text-gray-800">${category.title}</h3>
+                        </div>
+                        <i data-lucide="chevron-down" class="text-gray-500 chevron-icon" id="icon-cat-${cIdx}"></i>
+                    </button>
+                    
+                    <div id="cat-${cIdx}" class="accordion-content hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 pl-2 pr-2">
+                `;
+                
+                category.metrics.forEach((metric, mIdx) => {
+                    metricsHtml += `
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <h4 class="font-bold text-gray-800 text-lg flex items-center gap-2">
+                                        ${metric.name} <span class="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-md">${metric.jpName}</span>
+                                    </h4>
+                                    <p class="text-xs text-gray-500 mt-1 font-mono bg-gray-50 p-1 rounded inline-block">${metric.formulaStr}</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 space-y-3">
+                    `;
+                    
+                    metric.inputs.forEach(input => {
+                        metricsHtml += `
+                                <div class="flex items-center justify-between gap-2">
+                                    <label class="text-sm text-gray-600 flex-1">${input.label}</label>
+                                    <input type="number" placeholder="0" class="metric-input w-1/2 border border-gray-300 rounded-md px-3 py-1.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-500" data-cidx="${cIdx}" data-midx="${mIdx}" data-key="${input.key}">
+                                </div>
+                        `;
+                    });
+
+                    metricsHtml += `
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-end">
+                                <span class="text-sm font-semibold text-gray-500">Result</span>
+                                <span class="text-2xl font-bold text-blue-600" id="result-${cIdx}-${mIdx}">-</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                metricsHtml += `</div></div>`;
+            });
+            
+            allContainer.innerHTML = metricsHtml;
+
+            // アコーディオン開閉ロジック
+            document.querySelectorAll('.accordion-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const targetId = e.currentTarget.dataset.target;
+                    const content = document.getElementById(targetId);
+                    const icon = document.getElementById(`icon-${targetId}`);
+                    
+                    if (content.classList.contains('hidden')) {
+                        content.classList.remove('hidden');
+                        icon.classList.add('rotate-180');
+                    } else {
+                        content.classList.add('hidden');
+                        icon.classList.remove('rotate-180');
+                    }
+                });
+            });
+
+            // 動的計算ロジック
+            const metricState = {}; 
+            document.querySelectorAll('.metric-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const cIdx = e.target.dataset.cidx;
+                    const mIdx = e.target.dataset.midx;
+                    const key = e.target.dataset.key;
+                    const val = parseFloat(e.target.value) || 0;
+                    
+                    const stateKey = `${cIdx}-${mIdx}`;
+                    if(!metricState[stateKey]) metricState[stateKey] = {};
+                    metricState[stateKey][key] = val;
+                    
+                    const metric = metricsData[cIdx].metrics[mIdx];
+                    const result = metric.calc(metricState[stateKey]);
+                    
+                    document.getElementById(`result-${stateKey}`).innerText = formatValue(result, metric.format, metric.unit);
+                });
+            });
+
+            // 最後にLucideアイコンを描画
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

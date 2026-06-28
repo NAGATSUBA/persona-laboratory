@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surfactant 3D Explorer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #1a1a1a; color: #e0e0e0; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 350px; height: 100vh; background: rgba(30, 30, 30, 0.95); z-index: 10; padding: 20px; overflow-y: auto; border-right: 1px solid #444; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+        #controls-layer { position: absolute; top: 20px; right: 20px; z-index: 10; background: rgba(30, 30, 30, 0.9); padding: 15px; border-radius: 8px; border: 1px solid #444; width: 280px; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #2a2a2a; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #777; }
+
+        .input-group { margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        .input-group h3 { font-size: 0.9rem; color: #4ade80; margin-bottom: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        .input-row { display: flex; align-items: center; margin-bottom: 5px; font-size: 0.85rem; }
+        .input-row label { flex: 1; }
+        .input-row input[type="number"], .input-row select { background: #333; border: 1px solid #555; color: white; padding: 4px; border-radius: 4px; width: 70px; }
+        
+        .checkbox-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; margin-bottom: 8px; }
+        .checkbox-label { display: flex; align-items: center; font-size: 0.8rem; cursor: pointer; }
+        .checkbox-label input { margin-right: 4px; }
+
+        button.primary-btn { width: 100%; background: linear-gradient(90deg, #4ade80, #3b82f6); border: none; padding: 10px; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 10px; transition: transform 0.1s; }
+        button.primary-btn:active { transform: scale(0.98); }
+        button.secondary-btn { width: 100%; background: #444; border: 1px solid #666; padding: 8px; color: white; border-radius: 6px; cursor: pointer; margin-top: 10px; font-size: 0.85rem; }
+        button.secondary-btn:hover { background: #555; }
+        button.info-btn { width: 100%; background: #333; border: 1px solid #555; padding: 8px; color: #aaa; border-radius: 6px; cursor: pointer; margin-top: 10px; font-size: 0.8rem; }
+        button.info-btn:hover { background: #444; color: #fff; }
+
+        /* Tooltip Style */
+        #tooltip-popup {
+            position: absolute;
+            background: rgba(20, 20, 20, 0.95);
+            color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #4ade80;
+            pointer-events: none;
+            font-size: 0.8rem;
+            display: none;
+            z-index: 100;
+            white-space: pre-line;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            max-width: 320px;
+            line-height: 1.4;
+        }
+        #tooltip-popup strong { display: block; margin-bottom: 4px; font-size: 0.9rem; border-bottom: 1px solid #444; padding-bottom: 4px; }
+        #tooltip-popup .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        #tooltip-popup .label { color: #aaa; margin-right: 10px; }
+        #tooltip-popup .val { color: #4ade80; font-family: monospace; }
+
+        /* Methodology Modal */
+        #info-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: #222;
+            width: 80%;
+            max-width: 800px;
+            max-height: 90vh;
+            border-radius: 8px;
+            border: 1px solid #555;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2a2a2a;
+            border-radius: 8px 8px 0 0;
+        }
+        .modal-body {
+            padding: 30px;
+            overflow-y: auto;
+            color: #ddd;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .modal-body h2 { color: #4ade80; font-size: 1.2rem; border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 20px; margin-bottom: 10px; }
+        .modal-body h3 { color: #818cf8; font-size: 1.0rem; margin-top: 15px; margin-bottom: 8px; font-weight: bold; }
+        .modal-body p { margin-bottom: 10px; }
+        .modal-body table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.85rem; }
+        .modal-body th, .modal-body td { border: 1px solid #444; padding: 6px; text-align: left; }
+        .modal-body th { background: #333; color: #fff; }
+        .modal-body ul, .modal-body ol { margin-left: 20px; margin-bottom: 10px; }
+        .modal-body li { margin-bottom: 4px; }
+        .modal-body blockquote { background: #333; border-left: 4px solid #f59e0b; padding: 10px; margin: 10px 0; color: #eee; font-style: italic; }
+
+        /* Math Styling */
+        .math-block { background: #1a1a1a; padding: 10px; border-radius: 4px; text-align: center; margin: 10px 0; border: 1px solid #333; font-family: 'Times New Roman', serif; font-size: 1.1rem; }
+        .fraction { display: inline-flex; flex-direction: column; vertical-align: middle; margin: 0 5px; text-align: center; }
+        .numerator { border-bottom: 1px solid #fff; padding-bottom: 2px; }
+        .denominator { padding-top: 2px; }
+
+        .close-btn { background: none; border: none; color: #aaa; font-size: 1.5rem; cursor: pointer; }
+        .close-btn:hover { color: #fff; }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+    
+    <!-- Tooltip Popup -->
+    <div id="tooltip-popup"></div>
+
+    <!-- Methodology Modal -->
+    <div id="info-modal" onclick="if(event.target === this) this.style.display='none'">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-lg font-bold text-white"><i class="fas fa-book mr-2"></i>計算手法と参考文献</h2>
+                <button class="close-btn" onclick="document.getElementById('info-modal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <blockquote>
+                    <strong>注釈:</strong> 本アプリケーションは、古典的な理論モデル（Griffin法、Tanford式等）をベースにしつつ、実際の化粧品原料の挙動（W/O乳化能など）に適合するよう、立体障害や水和効率に関する<strong>独自の半経験的補正</strong>を導入したシミュレーションモデルです。
+                </blockquote>
+
+                <h2>1. 分子量 (Mw)</h2>
+                <p>構成原子団の総和として算出。</p>
+                <div class="math-block">Mw = &Sigma; (n<sub>i</sub> &times; Mw<sub>i</sub>)</div>
+
+                <h2>2. 溶解度パラメータ (HSP)</h2>
+                <p><strong>Van Krevelen & Hoftyzer (1976)</strong> の原子団寄与法を採用。</p>
+                <div class="math-block">
+                    &delta;<sub>d</sub> = &Sigma; F<sub>di</sub> / V, &nbsp;
+                    &delta;<sub>p</sub> = &radic;(&Sigma; F<sub>pi</sub><sup>2</sup>) / V, &nbsp;
+                    &delta;<sub>h</sub> = &radic;(&Sigma; E<sub>hi</sub> / V)
+                </div>
+                <h3>参考文献</h3>
+                <ol>
+                    <li>Van Krevelen, D.W., Hoftyzer, P.J., "Properties of Polymers", 2nd Ed., Elsevier (1976).</li>
+                </ol>
+
+                <h2>3. IOB (Inorganic / Organic Balance)</h2>
+                <p>有機概念図に基づく。</p>
+                <div class="math-block">IOB = &Sigma;I / &Sigma;O</div>
+
+                <h2>4. HLB (Griffin法・改)</h2>
+                <p>Griffin法をベースに、高分子エステルの実測物性に適合させるための独自補正を行っています。</p>
+                <div class="math-block">
+                    HLB = 20 &times; 
+                    <div class="fraction">
+                        <span class="numerator">Mw<sub>effective_head</sub></span>
+                        <span class="denominator">Mw<sub>total</sub></span>
+                    </div>
+                </div>
+                <p><strong>補正ロジック:</strong></p>
+                <ul>
+                    <li><strong>エステル結合の除外:</strong> 親油性への寄与を重視し、-COO-基は親水部質量に含めていません。</li>
+                    <li><strong>有効親水質量の導入:</strong> ポリグリセリンやPEG鎖における分子内水素結合や立体障害による水和能力の低下を考慮し、親水基質量に係数 <strong>0.9</strong> を乗じています。<br>
+                    <code>Mw<sub>effective_head</sub> = Mw<sub>head_only</sub> &times; 0.9</code></li>
+                </ul>
+
+                <h2>5. 臨界充填パラメータ (CPP)</h2>
+                <div class="math-block">
+                    CPP = v / (l<sub>c</sub> &times; a<sub>0</sub>)
+                </div>
+                <p>Tanfordの式を基準としつつ、不飽和・分岐鎖のパッキング特性を反映させるため、以下の幾何学的短縮補正を適用しています。</p>
+                <ul>
+                    <li><strong>体積 (v):</strong> Van Krevelen法のモル体積より換算。</li>
+                    <li><strong>鎖長 (l<sub>c</sub>) の補正:</strong>
+                        <ul>
+                            <li><strong>シス型二重結合:</strong> 1つにつき鎖長を <strong>30%</strong> 短縮。<br>（不飽和脂質の膜厚減少効果に基づくペナルティ）</li>
+                            <li><strong>分岐構造 (Iso):</strong> 鎖長を <strong>20%</strong> 短縮。</li>
+                        </ul>
+                    </li>
+                    <li><strong>親水基面積 (a<sub>0</sub>):</strong> 界面での密なパッキングを想定した経験的近似値を使用。</li>
+                </ul>
+
+                <h3>補正の根拠と関連文献</h3>
+                <p>本ツールの補正係数は、以下の物理化学的知見を参考に、実際の製剤物性（W/O乳化能）との整合性を取るためのフィッティングパラメータとして設定されています。</p>
+                <ul>
+                    <li><strong>脂質鎖の秩序パラメータ:</strong> シス型二重結合の導入により、炭化水素鎖の秩序パラメータ(S<sub>CD</sub>)が低下し、実効的な鎖長や膜厚が顕著に減少することが示されています。</li>
+                    <li><strong>親水基の水和:</strong> ポリエーテル鎖などは温度や構造によって水和数が変化し、理論値通りのHLB挙動を示さないケース（雲点現象など）があります。</li>
+                </ul>
+                <p><strong>主な参考・関連文献:</strong></p>
+                <ol>
+                    <li>Seelig, A., & Seelig, J. "Effect of a single cis double bond on the structure of a phospholipid bilayer." <i>Biochemistry</i>, 16(1), 45-50 (1977). (二重結合による膜厚減少について)</li>
+                    <li>Israelachvili, J. N. "Intermolecular and Surface Forces", Academic Press (2011). (CPPの概念)</li>
+                    <li>Nagarajan, R. "Molecular Packing Parameter and Surfactant Self-Assembly", <i>Langmuir</i>, 18(1), 31-38 (2002).</li>
+                </ol>
+                
+                <hr style="border-color:#444; margin: 20px 0;">
+                <p style="font-size: 0.8rem; text-align: center; color: #777;">Copyright © Persona Laboratory</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Left Sidebar: Configuration -->
+    <div id="ui-layer">
+        <h1 class="text-xl font-bold mb-4 text-white"><i class="fas fa-flask mr-2"></i>Surfactant 3D Explorer</h1>
+        
+        <!-- Hydrophobic Group Settings -->
+        <div class="input-group">
+            <h3>疎水基設定 (Tail)</h3>
+            
+            <div class="mb-3">
+                <div class="input-row">
+                    <input type="checkbox" id="check-carbon" checked> <label for="check-carbon">脂肪酸 (炭素鎖)</label>
+                </div>
+                <div class="pl-6 text-sm">
+                    <div class="input-row">
+                        <label>範囲 (C8-C22)</label>
+                        <input type="number" id="carbon-min" value="8" min="8" max="22">
+                        <span class="mx-2">~</span>
+                        <input type="number" id="carbon-max" value="18" min="8" max="22">
+                    </div>
+                    <div class="input-row">
+                        <label>ステップ</label>
+                        <input type="number" id="carbon-step" value="2" min="1">
+                    </div>
+                    
+                    <div class="mt-2">
+                        <label class="block text-gray-400 mb-1">二重結合数 (複数選択可)</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label"><input type="checkbox" class="cb-double" value="0" checked> 0</label>
+                            <label class="checkbox-label"><input type="checkbox" class="cb-double" value="1"> 1</label>
+                            <label class="checkbox-label"><input type="checkbox" class="cb-double" value="2"> 2</label>
+                            <label class="checkbox-label"><input type="checkbox" class="cb-double" value="3"> 3</label>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <label class="block text-gray-400 mb-1">鎖タイプ (複数選択可)</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label"><input type="checkbox" class="cb-branch" value="linear" checked> 直鎖</label>
+                            <label class="checkbox-label"><input type="checkbox" class="cb-branch" value="branched"> 分岐(iso)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="input-row">
+                    <input type="checkbox" id="check-ppg"> <label for="check-ppg">PPG (ポリプロピレングリコール)</label>
+                </div>
+                <div class="pl-6 text-sm">
+                    <div class="input-row">
+                        <label>重合度範囲</label>
+                        <input type="number" id="ppg-min" value="5" min="1">
+                        <span class="mx-2">~</span>
+                        <input type="number" id="ppg-max" value="20" min="1">
+                    </div>
+                    <div class="input-row">
+                        <label>ステップ</label>
+                        <input type="number" id="ppg-step" value="5" min="1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="input-row">
+                    <input type="checkbox" id="check-pr"> <label for="check-pr">PR (ポリリシノレイン酸)</label>
+                </div>
+                <div class="pl-6 text-sm">
+                    <div class="input-row">
+                        <label>重合度範囲</label>
+                        <input type="number" id="pr-min" value="2" min="2">
+                        <span class="mx-2">~</span>
+                        <input type="number" id="pr-max" value="6" min="2">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="input-row">
+                    <input type="checkbox" id="check-phs"> <label for="check-phs">PHS (ポリヒドロキシステアリン酸)</label>
+                </div>
+                <div class="pl-6 text-sm">
+                    <div class="input-row">
+                        <label>重合度範囲</label>
+                        <input type="number" id="phs-min" value="2" min="2">
+                        <span class="mx-2">~</span>
+                        <input type="number" id="phs-max" value="6" min="2">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hydrophilic Group Settings -->
+        <div class="input-group">
+            <h3>親水基設定 (Head)</h3>
+
+            <div class="mb-2">
+                <div class="input-row">
+                    <input type="checkbox" id="check-pg" checked> <label for="check-pg">ポリグリセリン (PG)</label>
+                </div>
+                <div class="pl-6 input-row">
+                    <input type="number" id="pg-min" value="2" min="1" max="40">
+                    <span class="mx-2">~</span>
+                    <input type="number" id="pg-max" value="10" min="1" max="40">
+                    <span class="ml-2">Step</span><input type="number" id="pg-step" value="2" class="ml-1" style="width:40px">
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <div class="input-row">
+                    <input type="checkbox" id="check-peg"> <label for="check-peg">PEG</label>
+                </div>
+                <div class="pl-6 input-row">
+                    <input type="number" id="peg-min" value="5" min="1" max="200">
+                    <span class="mx-2">~</span>
+                    <input type="number" id="peg-max" value="20" min="1" max="200">
+                    <span class="ml-2">Step</span><input type="number" id="peg-step" value="5" class="ml-1" style="width:40px">
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <div class="input-row">
+                    <input type="checkbox" id="check-peg-gly"> <label for="check-peg-gly">PEGグリセリル</label>
+                </div>
+                <div class="pl-6 input-row">
+                    <input type="number" id="peggly-min" value="5" min="1" max="200">
+                    <span class="mx-2">~</span>
+                    <input type="number" id="peggly-max" value="20" min="1" max="200">
+                    <span class="ml-2">Step</span><input type="number" id="peggly-step" value="5" class="ml-1" style="width:40px">
+                </div>
+            </div>
+        </div>
+
+        <!-- Structure Settings -->
+        <div class="input-group">
+            <h3>構造設定</h3>
+            <div class="input-row">
+                <label>エステル化度範囲</label>
+                <input type="number" id="ester-min" value="1" min="1" max="5">
+                <span class="mx-2">~</span>
+                <input type="number" id="ester-max" value="1" min="1" max="5">
+            </div>
+            <p class="tooltip">※水酸基の数を超える場合は最大値に制限されます</p>
+        </div>
+
+        <button class="primary-btn" onclick="app.generateData()">
+            <i class="fas fa-calculator"></i> 計算 & プロット生成
+        </button>
+
+        <button class="secondary-btn" onclick="app.exportCSV()">
+            <i class="fas fa-file-csv"></i> CSVリスト出力
+        </button>
+
+        <button class="info-btn" onclick="document.getElementById('info-modal').style.display='flex'">
+            <i class="fas fa-book-open"></i> 計算手法と参考文献
+        </button>
+
+        <div class="mt-4 pt-4 border-t border-gray-600 text-xs text-gray-400 text-center">
+            <p>Copyright © Persona Laboratory</p>
+        </div>
+    </div>
+
+    <!-- Right Top: Display Controls -->
+    <div id="controls-layer">
+        <h3 class="text-green-400 font-bold mb-2">3D Axis Config</h3>
+        <div class="input-row">
+            <label class="text-red-500 font-bold w-20">X軸</label>
+            <select id="axis-x" onchange="app.updateVisualization()">
+                <option value="hlb">HLB</option>
+                <option value="iob">IOB</option>
+                <option value="mw">分子量 (Mw)</option>
+                <option value="delta_d">δd (分散項)</option>
+                <option value="delta_p">δp (極性項)</option>
+                <option value="delta_h">δh (水素結合)</option>
+                <option value="cpp">CPP</option>
+            </select>
+        </div>
+        <div class="input-row">
+            <label class="text-green-500 font-bold w-20">Y軸</label>
+            <select id="axis-y" onchange="app.updateVisualization()">
+                <option value="hlb">HLB</option>
+                <option value="iob" selected>IOB</option>
+                <option value="mw">分子量 (Mw)</option>
+                <option value="delta_d">δd (分散項)</option>
+                <option value="delta_p">δp (極性項)</option>
+                <option value="delta_h">δh (水素結合)</option>
+                <option value="cpp">CPP</option>
+            </select>
+        </div>
+        <div class="input-row">
+            <label class="text-blue-500 font-bold w-20">Z軸 (Up)</label>
+            <select id="axis-z" onchange="app.updateVisualization()">
+                <option value="hlb">HLB</option>
+                <option value="iob">IOB</option>
+                <option value="mw" selected>分子量 (Mw)</option>
+                <option value="delta_d">δd (分散項)</option>
+                <option value="delta_p">δp (極性項)</option>
+                <option value="delta_h">δh (水素結合)</option>
+                <option value="cpp">CPP</option>
+            </select>
+        </div>
+        <div class="mt-2 text-xs text-gray-300">
+            <p>データ点数: <span id="data-count">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        // --- Constants & Chemistry Logic ---
+        const ATOMIC_WEIGHTS = { H: 1.008, C: 12.011, O: 15.999 };
+        
+        // Group Contribution Parameters (Van Krevelen & Hoftyzer 1976)
+        // Fd: Dispersion, Fp: Polar, Eh: Hydrogen Bonding Energy, V: Molar Volume
+        // Units: Fd, Fp -> (J cm^3)^0.5 / mol, Eh -> J/mol, V -> cm^3/mol
+        const GROUPS_VK = {
+            '-CH3':    { mw: 15.03, Fd: 420, Fp: 0,   Eh: 0,     V: 33.5, i_inorg: 0, i_org: 20 },
+            '-CH2-':   { mw: 14.03, Fd: 270, Fp: 0,   Eh: 0,     V: 16.1, i_inorg: 0, i_org: 20 },
+            '=CH-':    { mw: 13.02, Fd: 200, Fp: 0,   Eh: 0,     V: 13.5, i_inorg: 2, i_org: 20 }, // Approx for double bond C
+            '>CH-':    { mw: 13.02, Fd: 80,  Fp: 0,   Eh: 0,     V: 9.0,  i_inorg: 0, i_org: 20 }, // Branch point (approx V)
+            '-OH':     { mw: 17.01, Fd: 210, Fp: 500, Eh: 20000, V: 10.0, i_inorg: 100, i_org: 0 },
+            '-COO-':   { mw: 44.01, Fd: 390, Fp: 490, Eh: 7000,  V: 18.0, i_inorg: 60, i_org: 0 },
+            '-O-':     { mw: 16.00, Fd: 256, Fp: 400, Eh: 3000,  V: 3.8,  i_inorg: 20, i_org: 0 }
+        };
+
+        // --- Calculation Classes ---
+
+        class Surfactant {
+            constructor(tailType, tailParams, headType, headParams, esterDegree) {
+                this.tailType = tailType; // 'carbon', 'ppg', 'pr', 'phs'
+                this.tailParams = tailParams;
+                this.headType = headType; // 'pg', 'peg', 'peg-gly'
+                this.headParams = headParams;
+                this.esterDegree = parseInt(esterDegree);
+                
+                this.props = this.calculateProperties();
+                this.name = this.generateName();
+            }
+
+            calculateProperties() {
+                // Initialize Accumulators for HSP (Van Krevelen) and IOB/Mw
+                let sum_Fd = 0;
+                let sum_Fp2 = 0; // sum of Fp^2
+                let sum_Eh = 0;
+                let sum_V = 0;
+
+                let mw = 0;
+                let mw_head_only = 0; // NEW: Track hydrophilic mass for HLB (excludes -COO-)
+                let i_inorg = 0;
+                let i_org = 0;
+                
+                // Helper to add group
+                const addGroup = (groupName, count = 1) => {
+                    if(!GROUPS_VK[groupName]) return;
+                    const g = GROUPS_VK[groupName];
+                    sum_Fd += g.Fd * count;
+                    sum_Fp2 += (g.Fp * g.Fp) * count;
+                    sum_Eh += g.Eh * count;
+                    sum_V += g.V * count;
+                    
+                    mw += g.mw * count;
+                    i_inorg += g.i_inorg * count;
+                    i_org += g.i_org * count;
+                };
+
+                // Helper to add HEAD group (counts for HLB hydrophilic)
+                const addHeadGroup = (groupName, count = 1) => {
+                    addGroup(groupName, count);
+                    if(GROUPS_VK[groupName]) {
+                        mw_head_only += GROUPS_VK[groupName].mw * count;
+                    }
+                };
+
+                // --- 1. Calculate Tail Groups (per chain) ---
+                let t_len = 0; 
+                let t_vol_for_cpp = 0; // Accumulated volume for CPP
+
+                // Accumulators for single tail chain
+                // We will multiply these by esterDegree later, or loop
+                // To keep it clean, let's calculate one tail, then multiply.
+                
+                // Temporary holders for single tail
+                const singleTail = { Fd:0, Fp2:0, Eh:0, V:0, mw:0, ii:0, io:0 };
+                
+                const addTailGroup = (name, count) => {
+                     const g = GROUPS_VK[name];
+                     singleTail.Fd += g.Fd * count;
+                     singleTail.Fp2 += (g.Fp * g.Fp) * count;
+                     singleTail.Eh += g.Eh * count;
+                     singleTail.V += g.V * count;
+                     singleTail.mw += g.mw * count;
+                     singleTail.ii += g.i_inorg * count;
+                     singleTail.io += g.i_org * count;
+                };
+
+                if (this.tailType === 'carbon') {
+                    const c = this.tailParams.carbon;
+                    const db = this.tailParams.double;
+                    const iso = this.tailParams.iso;
+                    
+                    let ch3_count = 1;
+                    let ch2_count = c - 1; 
+                    let ch_db_count = 0; // =CH-
+                    let ch_br_count = 0; // >CH-
+
+                    if (db > 0) {
+                        ch2_count -= db * 2;
+                        ch_db_count += db * 2;
+                    }
+
+                    if (iso) {
+                        ch3_count = 2;
+                        ch_br_count = 1;
+                        ch2_count = c - 3; // Total C - (2 CH3 + 1 CH)
+                        if (db > 0) {
+                             ch2_count -= db * 2; // Reduce further for double bonds
+                        }
+                    }
+
+                    addTailGroup('-CH3', ch3_count);
+                    if(ch2_count > 0) addTailGroup('-CH2-', ch2_count);
+                    if(ch_db_count > 0) addTailGroup('=CH-', ch_db_count);
+                    if(ch_br_count > 0) addTailGroup('>CH-', ch_br_count);
+
+                    // Length Calculation with corrections
+                    // Tanford l_max = 1.5 + 1.265 * nc
+                    // However, effective length in liquid state is shorter (approx 80% of all-trans).
+                    // Plus geometric penalties for kinks.
+                    t_len = (1.5 + (1.265 * c)) * 0.8; // Base effective length factor (fluidity)
+
+                    // Corrections for CPP geometry (Kinks reduce normal length significantly)
+                    // REVISED: Stronger penalty for cis-double bonds to simulate folding/U-shape
+                    if (db > 0) t_len *= (1.0 - (0.30 * db)); // -30% per double bond (was 0.15)
+                    if (iso) t_len *= 0.80;    // Branching reduces effective length (was 0.85)
+
+                } else if (this.tailType === 'ppg') {
+                    const n = this.tailParams.n;
+                    addTailGroup('-CH2-', n);
+                    addTailGroup('>CH-', n);
+                    addTailGroup('-CH3', n);
+                    addTailGroup('-O-', n);
+                    t_len = n * 3.0; // Coil
+                } else if (this.tailType === 'pr') {
+                    const n = this.tailParams.n;
+                    addTailGroup('-COO-', n); 
+                    addTailGroup('=CH-', n * 2);
+                    addTailGroup('>CH-', n);
+                    addTailGroup('-CH3', n);
+                    addTailGroup('-CH2-', n * 13);
+                    t_len = n * 12; // Folded polymer (more compact)
+                } else if (this.tailType === 'phs') {
+                    const n = this.tailParams.n;
+                    addTailGroup('-COO-', n);
+                    addTailGroup('>CH-', n);
+                    addTailGroup('-CH3', n);
+                    addTailGroup('-CH2-', n * 15);
+                    t_len = n * 12;
+                }
+
+                // Apply Tail x EsterDegree
+                sum_Fd += singleTail.Fd * this.esterDegree;
+                sum_Fp2 += singleTail.Fp2 * this.esterDegree;
+                sum_Eh += singleTail.Eh * this.esterDegree;
+                sum_V += singleTail.V * this.esterDegree;
+                mw += singleTail.mw * this.esterDegree;
+                i_inorg += singleTail.ii * this.esterDegree;
+                i_org += singleTail.io * this.esterDegree;
+                
+                // Tail Volume for CPP (approx)
+                // Use explicit Tanford volume approximation for Carbon chains to be safe, 
+                // or stick to Molar Volume which is consistent.
+                // V_mol ~ 26.9 * Nc. Our GROUPS_VK give ~16.1 for CH2.
+                // 16.1 * 1.66 ~ 26.7. This matches Tanford well.
+                const t_vol_total_cm3 = singleTail.V * this.esterDegree;
+                const tail_vol_A = t_vol_total_cm3 * 1.66;
+
+                // --- Connecting Group (Ester Linkage) ---
+                // NOTE: Exclude from mw_head_only to lower HLB to realistic values
+                addGroup('-COO-', this.esterDegree);
+
+                // --- Head Calculation ---
+                let h_area = 50;
+
+                if (this.headType === 'pg') {
+                    const n = this.headParams.n;
+                    // Standard Unit: -CH2-CH(OH)-CH2-O-
+                    addHeadGroup('-CH2-', n * 2);
+                    addHeadGroup('>CH-', n);
+                    addHeadGroup('-OH', n); 
+                    addHeadGroup('-O-', n); 
+                    
+                    addHeadGroup('-OH', 1);
+
+                    // Adjusted area for PG to allow CPP > 1 for hydrophobic esters
+                    // REVISED: Tighter packing for PG head
+                    h_area = 24 + (n * 3);
+
+                } else if (this.headType === 'peg') {
+                    const n = this.headParams.n;
+                    addHeadGroup('-CH2-', n * 2);
+                    addHeadGroup('-O-', n);
+                    addHeadGroup('-OH', 1); // Terminal
+                    
+                    // PEG random coil radius based area
+                    // REVISED: Slightly smaller area
+                    h_area = 20 + (Math.sqrt(n) * 5);
+
+                } else if (this.headType === 'peg-gly') {
+                    const n = this.headParams.n;
+                    addHeadGroup('>CH-', 1);
+                    addHeadGroup('-CH2-', 2); 
+                    addHeadGroup('-CH2-', n * 2); 
+                    addHeadGroup('-O-', n);       
+                    
+                    const remainingOH = Math.max(0, 3 - this.esterDegree);
+                    if(remainingOH > 0) addHeadGroup('-OH', remainingOH);
+
+                    h_area = 35 + (Math.sqrt(n) * 5);
+                }
+
+                // --- Final Calculations ---
+                
+                // 1. HSP
+                const delta_d = sum_V > 0 ? (sum_Fd / sum_V) : 0;
+                const delta_p = sum_V > 0 ? (Math.sqrt(sum_Fp2) / sum_V) : 0;
+                const delta_h = sum_V > 0 ? (Math.sqrt(sum_Eh / sum_V)) : 0;
+
+                // 2. IOB
+                const iob = i_org > 0 ? (i_inorg / i_org) : 0;
+
+                // 3. HLB (Griffin)
+                // REVISED: Apply correction factor (0.9) to hydrophilic mass
+                // to account for reduced hydration of polymeric heads/steric hindrance.
+                // This lowers HLB to be more consistent with commercial W/O emulsifiers.
+                const effective_hydrophilic_mass = mw_head_only * 0.9;
+                const hlb = (effective_hydrophilic_mass / mw) * 20;
+
+                // 4. CPP
+                const cpp = (t_len > 0 && h_area > 0) ? (tail_vol_A / (t_len * h_area)) : 0;
+
+                return {
+                    mw: parseFloat(mw.toFixed(2)),
+                    iob: parseFloat(iob.toFixed(2)),
+                    hlb: parseFloat(hlb.toFixed(2)),
+                    delta_d: parseFloat(delta_d.toFixed(2)),
+                    delta_p: parseFloat(delta_p.toFixed(2)),
+                    delta_h: parseFloat(delta_h.toFixed(2)),
+                    cpp: parseFloat(cpp.toFixed(3))
+                };
+            }
+
+            generateName() {
+                let tailStr = "";
+                if (this.tailType === 'carbon') {
+                    if (this.tailParams.iso) tailStr += "Isostearate"; 
+                    else if (this.tailParams.double > 0) tailStr += "Oleate"; 
+                    else {
+                        const acids = {8:'Caprylate', 10:'Caprate', 12:'Laurate', 14:'Myristate', 16:'Palmitate', 18:'Stearate', 20:'Arachidate', 22:'Behenate'};
+                        tailStr = acids[this.tailParams.carbon] || `C${this.tailParams.carbon}-Ester`;
+                    }
+                } else if (this.tailType === 'ppg') {
+                    tailStr = `PPG-${this.tailParams.n}-Ether-Ester`;
+                } else if (this.tailType === 'pr') {
+                    tailStr = `Polyricinoleate (n=${this.tailParams.n})`;
+                } else if (this.tailType === 'phs') {
+                    tailStr = `Polyhydroxystearate (n=${this.tailParams.n})`;
+                }
+
+                let headStr = "";
+                if (this.headType === 'pg') headStr = `Polyglyceryl-${this.headParams.n}`;
+                if (this.headType === 'peg') headStr = `PEG-${this.headParams.n}`;
+                if (this.headType === 'peg-gly') headStr = `PEG-${this.headParams.n} Glyceryl`;
+
+                const prefix = this.esterDegree === 1 ? "" : (this.esterDegree === 2 ? "Di" : (this.esterDegree === 3 ? "Tri" : `Poly-${this.esterDegree}-`));
+
+                return `${headStr} ${prefix}${tailStr}`;
+            }
+        }
+
+        // --- Application Logic ---
+        const app = {
+            data: [],
+            scene: null,
+            camera: null,
+            renderer: null,
+            pointsMesh: null,
+            controls: null,
+            labelsGroup: null, 
+            axesGroup: null,
+            
+            // For Raycasting (Hover detection)
+            raycaster: new THREE.Raycaster(),
+            mouse: new THREE.Vector2(),
+            
+            init: function() {
+                this.initThree();
+                
+                // Explicitly bind the event listener methods to 'this' (app)
+                this.boundOnMouseMove = this.onMouseMove.bind(this);
+                this.boundOnWindowResize = this.onWindowResize.bind(this);
+                
+                // Add mouse move listener with explicit binding
+                window.addEventListener('mousemove', this.boundOnMouseMove);
+                window.addEventListener('resize', this.boundOnWindowResize);
+                
+                // Start animation loop
+                this.animate();
+            },
+
+            initThree: function() {
+                const container = document.getElementById('canvas-container');
+                
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x111111);
+                
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.up.set(0, 0, 1);
+                this.camera.position.set(70, -70, 70);
+
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                container.appendChild(this.renderer.domElement);
+
+                // Controls
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+
+                // Create Thick Axes
+                this.createThickAxes();
+
+                // Grid (XY Plane)
+                const gridHelper = new THREE.GridHelper(100, 10, 0x444444, 0x222222);
+                gridHelper.geometry.rotateX(Math.PI / 2);
+                gridHelper.position.set(50, 50, 0); 
+                this.scene.add(gridHelper);
+
+                // Labels Group
+                this.labelsGroup = new THREE.Group();
+                this.scene.add(this.labelsGroup);
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(20, -20, 50);
+                this.scene.add(dirLight);
+            },
+
+            createThickAxes: function() {
+                this.axesGroup = new THREE.Group();
+                const axisLength = 100;
+                const axisRadius = 0.5;
+
+                // X Axis (Red)
+                const geometryX = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 12);
+                geometryX.translate(0, axisLength / 2, 0);
+                geometryX.rotateZ(-Math.PI / 2); 
+                const materialX = new THREE.MeshPhongMaterial({ color: 0xff3333 });
+                const axisX = new THREE.Mesh(geometryX, materialX);
+                this.axesGroup.add(axisX);
+
+                // Y Axis (Green)
+                const geometryY = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 12);
+                geometryY.translate(0, axisLength / 2, 0); 
+                const materialY = new THREE.MeshPhongMaterial({ color: 0x33ff33 });
+                const axisY = new THREE.Mesh(geometryY, materialY);
+                this.axesGroup.add(axisY);
+
+                // Z Axis (Blue) - Up
+                const geometryZ = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength, 12);
+                geometryZ.translate(0, axisLength / 2, 0);
+                geometryZ.rotateX(Math.PI / 2); 
+                const materialZ = new THREE.MeshPhongMaterial({ color: 0x3333ff });
+                const axisZ = new THREE.Mesh(geometryZ, materialZ);
+                this.axesGroup.add(axisZ);
+
+                this.scene.add(this.axesGroup);
+            },
+
+            createTextSprite: function(text, colorStr, fontsize = 48) {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.font = `bold ${fontsize}px "Arial Black", Arial, sans-serif`;
+                const metrics = ctx.measureText(text);
+                canvas.width = metrics.width + 20;
+                canvas.height = fontsize + 20;
+                ctx.font = `bold ${fontsize}px "Arial Black", Arial, sans-serif`;
+                ctx.fillStyle = colorStr;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                const sprite = new THREE.Sprite(material);
+                sprite.scale.set(canvas.width * 0.1, canvas.height * 0.1, 1);
+                return sprite;
+            },
+
+            generateData: function() {
+                this.data = [];
+                const minEster = parseInt(document.getElementById('ester-min').value);
+                const maxEster = parseInt(document.getElementById('ester-max').value);
+
+                for (let esterDegree = minEster; esterDegree <= maxEster; esterDegree++) {
+                    if (document.getElementById('check-carbon').checked) {
+                        const min = parseInt(document.getElementById('carbon-min').value);
+                        const max = parseInt(document.getElementById('carbon-max').value);
+                        const step = parseInt(document.getElementById('carbon-step').value);
+                        
+                        // New: Get selected double bonds and branching types
+                        const selectedDoubles = Array.from(document.querySelectorAll('.cb-double:checked')).map(cb => parseInt(cb.value));
+                        const selectedBranches = Array.from(document.querySelectorAll('.cb-branch:checked')).map(cb => cb.value === 'branched');
+
+                        for (let c = min; c <= max; c += step) {
+                            // Loop through double bond options
+                            selectedDoubles.forEach(dbl => {
+                                // Loop through branch options
+                                selectedBranches.forEach(isBranched => {
+                                    this.addHeadCombinations('carbon', {carbon: c, double: dbl, iso: isBranched}, esterDegree);
+                                });
+                            });
+                        }
+                    }
+
+                    if (document.getElementById('check-ppg').checked) {
+                        const min = parseInt(document.getElementById('ppg-min').value);
+                        const max = parseInt(document.getElementById('ppg-max').value);
+                        const step = parseInt(document.getElementById('ppg-step').value);
+                        for (let n = min; n <= max; n += step) {
+                            this.addHeadCombinations('ppg', {n: n}, esterDegree);
+                        }
+                    }
+
+                    if (document.getElementById('check-pr').checked) {
+                        const min = parseInt(document.getElementById('pr-min').value);
+                        const max = parseInt(document.getElementById('pr-max').value);
+                        for (let n = min; n <= max; n++) {
+                            this.addHeadCombinations('pr', {n: n}, esterDegree);
+                        }
+                    }
+
+                    if (document.getElementById('check-phs').checked) {
+                        const min = parseInt(document.getElementById('phs-min').value);
+                        const max = parseInt(document.getElementById('phs-max').value);
+                        for (let n = min; n <= max; n++) {
+                            this.addHeadCombinations('phs', {n: n}, esterDegree);
+                        }
+                    }
+                }
+
+                document.getElementById('data-count').innerText = this.data.length;
+                this.updateVisualization();
+            },
+
+            addHeadCombinations: function(tailType, tailParams, esterDegree) {
+                if (document.getElementById('check-pg').checked) {
+                    const min = parseInt(document.getElementById('pg-min').value);
+                    const max = parseInt(document.getElementById('pg-max').value);
+                    const step = parseInt(document.getElementById('pg-step').value);
+                    for (let n = min; n <= max; n += step) {
+                        this.data.push(new Surfactant(tailType, tailParams, 'pg', {n: n}, esterDegree));
+                    }
+                }
+                if (document.getElementById('check-peg').checked) {
+                    const min = parseInt(document.getElementById('peg-min').value);
+                    const max = parseInt(document.getElementById('peg-max').value);
+                    const step = parseInt(document.getElementById('peg-step').value);
+                    for (let n = min; n <= max; n += step) {
+                        this.data.push(new Surfactant(tailType, tailParams, 'peg', {n: n}, esterDegree));
+                    }
+                }
+                if (document.getElementById('check-peg-gly').checked) {
+                    const min = parseInt(document.getElementById('peggly-min').value);
+                    const max = parseInt(document.getElementById('peggly-max').value);
+                    const step = parseInt(document.getElementById('peggly-step').value);
+                    for (let n = min; n <= max; n += step) {
+                        this.data.push(new Surfactant(tailType, tailParams, 'peg-gly', {n: n}, esterDegree));
+                    }
+                }
+            },
+
+            updateVisualization: function() {
+                if (this.pointsMesh) {
+                    this.scene.remove(this.pointsMesh);
+                    this.pointsMesh.geometry.dispose();
+                    this.pointsMesh.material.dispose();
+                    this.pointsMesh = null;
+                }
+                while(this.labelsGroup.children.length > 0){ 
+                    this.labelsGroup.remove(this.labelsGroup.children[0]); 
+                }
+
+                if (this.data.length === 0) return;
+
+                const xKey = document.getElementById('axis-x').value;
+                const yKey = document.getElementById('axis-y').value;
+                const zKey = document.getElementById('axis-z').value;
+
+                // Label Mapping
+                const labelMap = {
+                    hlb: 'HLB',
+                    iob: 'IOB',
+                    mw: 'Mw',
+                    delta_d: 'δd',
+                    delta_p: 'δp',
+                    delta_h: 'δh',
+                    cpp: 'CPP'
+                };
+
+                const ranges = {
+                    hlb: {min: 0, max: 20},
+                    iob: {min: 0, max: 5}, 
+                    mw: {min: 0, max: 5000},
+                    delta_d: {min: 10, max: 25},
+                    delta_p: {min: 0, max: 20},
+                    delta_h: {min: 0, max: 20},
+                    cpp: {min: 0, max: 2}
+                };
+
+                this.data.forEach(d => {
+                    if (d.props[xKey] > ranges[xKey].max) ranges[xKey].max = d.props[xKey];
+                    if (d.props[yKey] > ranges[yKey].max) ranges[yKey].max = d.props[yKey];
+                    if (d.props[zKey] > ranges[zKey].max) ranges[zKey].max = d.props[zKey];
+                });
+
+                const axisLength = 100;
+                const labelSize = 64; 
+                const tickSize = 32;
+
+                // Use mapped names instead of toUpperCase()
+                const xLabelText = labelMap[xKey] || xKey.toUpperCase();
+                const xLabel = this.createTextSprite(xLabelText, '#ff5555', labelSize);
+                xLabel.position.set(axisLength + 15, 0, 0);
+                this.labelsGroup.add(xLabel);
+
+                const yLabelText = labelMap[yKey] || yKey.toUpperCase();
+                const yLabel = this.createTextSprite(yLabelText, '#55ff55', labelSize);
+                yLabel.position.set(0, axisLength + 15, 0);
+                this.labelsGroup.add(yLabel);
+
+                const zLabelText = labelMap[zKey] || zKey.toUpperCase();
+                const zLabel = this.createTextSprite(zLabelText, '#5555ff', labelSize);
+                zLabel.position.set(0, 0, axisLength + 15);
+                this.labelsGroup.add(zLabel);
+
+                const steps = 5;
+                for(let i=1; i<=steps; i++) {
+                    const pct = i / steps;
+                    const pos = pct * axisLength;
+
+                    const xVal = (ranges[xKey].max * pct).toFixed(1);
+                    const xTick = this.createTextSprite(xVal, '#ffaaaa', tickSize);
+                    xTick.position.set(pos, -5, 0);
+                    this.labelsGroup.add(xTick);
+
+                    const yVal = (ranges[yKey].max * pct).toFixed(1);
+                    const yTick = this.createTextSprite(yVal, '#aaffaa', tickSize);
+                    yTick.position.set(-5, pos, 0);
+                    this.labelsGroup.add(yTick);
+
+                    const zVal = (ranges[zKey].max * pct).toFixed(1);
+                    const zTick = this.createTextSprite(zVal, '#aaaaff', tickSize);
+                    zTick.position.set(-5, 0, pos);
+                    this.labelsGroup.add(zTick);
+                }
+
+                const geometry = new THREE.SphereGeometry(1, 16, 16);
+                const material = new THREE.MeshPhongMaterial({ color: 0xffffff });
+                this.pointsMesh = new THREE.InstancedMesh(geometry, material, this.data.length);
+
+                const dummy = new THREE.Object3D();
+                const color = new THREE.Color();
+
+                this.data.forEach((d, i) => {
+                    const x = (d.props[xKey] / ranges[xKey].max) * 100;
+                    const y = (d.props[yKey] / ranges[yKey].max) * 100;
+                    const z = (d.props[zKey] / ranges[zKey].max) * 100;
+
+                    dummy.position.set(x, y, z); 
+                    dummy.scale.set(1.5, 1.5, 1.5);
+                    dummy.updateMatrix();
+                    this.pointsMesh.setMatrixAt(i, dummy.matrix);
+
+                    if (d.tailType === 'carbon') color.setHex(0xff3333); 
+                    else if (d.tailType === 'ppg') color.setHex(0x33ff33); 
+                    else if (d.tailType === 'pr') color.setHex(0x3333ff); 
+                    else if (d.tailType === 'phs') color.setHex(0xffff33); 
+                    
+                    this.pointsMesh.setColorAt(i, color);
+                });
+
+                this.pointsMesh.instanceMatrix.needsUpdate = true;
+                this.pointsMesh.instanceColor.needsUpdate = true;
+                this.scene.add(this.pointsMesh);
+            },
+
+            onMouseMove: function(event) {
+                // Convert mouse position to normalized device coordinates (-1 to +1)
+                this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+                // Update tooltip position (follow mouse with slight offset)
+                const tooltip = document.getElementById('tooltip-popup');
+                if(tooltip) {
+                    tooltip.style.left = (event.clientX + 15) + 'px';
+                    tooltip.style.top = (event.clientY + 15) + 'px';
+                }
+            },
+
+            onWindowResize: function() {
+                if (!this.camera || !this.renderer) return;
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            },
+
+            animate: function() {
+                requestAnimationFrame(() => this.animate());
+                if (this.controls) this.controls.update();
+
+                // Make labels face camera
+                if (this.labelsGroup && this.camera) {
+                    this.labelsGroup.children.forEach(sprite => {
+                        sprite.lookAt(this.camera.position);
+                    });
+                }
+
+                // Raycasting logic
+                if (this.pointsMesh && this.raycaster && this.camera) {
+                    this.raycaster.setFromCamera(this.mouse, this.camera);
+                    const intersects = this.raycaster.intersectObject(this.pointsMesh);
+                    const tooltip = document.getElementById('tooltip-popup');
+
+                    if (intersects.length > 0) {
+                        const instanceId = intersects[0].instanceId;
+                        const d = this.data[instanceId];
+                        if (d && tooltip) {
+                            tooltip.style.display = 'block';
+                            tooltip.innerHTML = `
+                                <strong class="text-green-400">${d.name}</strong>
+                                <div class="row"><span class="label">Structure</span> <span class="val">${d.tailType} / ${d.headType}</span></div>
+                                <div class="row"><span class="label">Mw</span> <span class="val">${d.props.mw}</span></div>
+                                <div class="row"><span class="label">IOB / HLB</span> <span class="val">${d.props.iob} / ${d.props.hlb}</span></div>
+                                <div class="row"><span class="label">δd / δp / δh</span> <span class="val">${d.props.delta_d} / ${d.props.delta_p} / ${d.props.delta_h}</span></div>
+                                <div class="row"><span class="label">CPP</span> <span class="val">${d.props.cpp}</span></div>
+                            `;
+                        }
+                    } else if (tooltip) {
+                        tooltip.style.display = 'none';
+                    }
+                }
+
+                if (this.renderer && this.scene && this.camera) {
+                    this.renderer.render(this.scene, this.camera);
+                }
+            },
+
+            exportCSV: function() {
+                if (this.data.length === 0) {
+                    alert("データがありません。計算を実行してください。");
+                    return;
+                }
+
+                // BOM (Byte Order Mark) for Excel UTF-8 compatibility
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+                
+                // Header Row
+                csvContent += "Name,Tail_Type,Carbon_Num,Double_Bond,Branched,Tail_Polymerization,Head_Type,Head_Polymerization,Ester_Degree,Mw,IOB,HLB,delta_D,delta_P,delta_H,CPP\n";
+
+                this.data.forEach(d => {
+                    let tailTypeStr = "";
+                    let carbonVal = "";
+                    let doubleVal = "";
+                    let branchedVal = "";
+                    let tailPolyVal = "";
+
+                    // Normalize Tail Info
+                    if (d.tailType === 'carbon') {
+                        tailTypeStr = "Fatty Acid";
+                        carbonVal = d.tailParams.carbon;
+                        doubleVal = d.tailParams.double;
+                        branchedVal = d.tailParams.iso ? "あり" : "なし";
+                    } else {
+                        if (d.tailType === 'ppg') tailTypeStr = "PPG";
+                        else if (d.tailType === 'pr') tailTypeStr = "PR";
+                        else if (d.tailType === 'phs') tailTypeStr = "PHS";
+                        
+                        tailPolyVal = d.tailParams.n;
+                    }
+
+                    // Normalize Head Info
+                    let headTypeStr = "";
+                    if (d.headType === 'pg') headTypeStr = "PG";
+                    else if (d.headType === 'peg') headTypeStr = "PEG";
+                    else if (d.headType === 'peg-gly') headTypeStr = "PEG-Glyceryl";
+
+                    const row = [
+                        `"${d.name}"`, // Enclose name in quotes
+                        tailTypeStr,
+                        carbonVal,
+                        doubleVal,
+                        branchedVal,
+                        tailPolyVal,
+                        headTypeStr,
+                        d.headParams.n,
+                        d.esterDegree,
+                        d.props.mw,
+                        d.props.iob,
+                        d.props.hlb,
+                        d.props.delta_d,
+                        d.props.delta_p,
+                        d.props.delta_h,
+                        d.props.cpp
+                    ].join(",");
+                    csvContent += row + "\n";
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "surfactant_profile.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        // Start
+        window.onload = () => app.init();
+
+    </script>
+</body>
+</html>

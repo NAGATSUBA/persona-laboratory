@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>対距離分布関数 p(r) - コアシェルロッドモデル (コントラスト有り)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+        }
+        .canvas-container, .graph-container {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative; /* For legend */
+        }
+        canvas {
+            background-color: #fdfdfd;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        h1, h2 {
+            color: #673ab7;
+            margin-top: 0;
+        }
+        p { margin-top: 0; text-align: center; max-width: 800px; }
+        .controls {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 15px 25px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+        }
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 10px 0;
+        }
+        .slider-group label { font-weight: bold; width: 180px; }
+        .slider-group input[type="range"] { flex-grow: 1; cursor: pointer; }
+        .slider-group span { min-width: 40px; text-align: right; font-family: monospace; }
+        .legend {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            border: 1px solid #eee;
+        }
+        .legend div { display: flex; align-items: center; margin-bottom: 2px; }
+        .legend-color { width: 12px; height: 12px; margin-right: 5px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>対距離分布関数 p(r) - コアシェルロッドモデル (コントラスト有り)</h1>
+    <p>コアシェルロッドモデルに散乱コントラストとp(r)関数の内訳表示を導入しました。スライダーを操作し、各成分が全体の関数形にどう貢献するか観察してみましょう。</p>
+
+    <div class="container">
+        <div class="canvas-container">
+            <h2>ロッド構造 (断面図)</h2>
+            <canvas id="rodCanvas" width="400" height="400"></canvas>
+        </div>
+        <div class="graph-container">
+            <h2>対距離分布関数 p(r)</h2>
+            <canvas id="graphCanvas" width="400" height="400"></canvas>
+            <div class="legend">
+                <div><div class="legend-color" style="background-color: #03a9f4;"></div>シェル - シェル</div>
+                <div><div class="legend-color" style="background-color: #ffc107;"></div>コア - コア</div>
+                <div><div class="legend-color" style="background-color: #4caf50;"></div>シェル - コア</div>
+                <div><div class="legend-color" style="background-color: #e91e63; border: 2px solid #e91e63;"></div>合計 p(r)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="slider-group">
+            <label for="rodLength">ロッドの長さ:</label>
+            <input type="range" id="rodLength" min="50" max="350" value="250">
+            <span id="rodLengthValue">250</span>
+        </div>
+        <div class="slider-group">
+            <label for="totalRadius">全体の半径:</label>
+            <input type="range" id="totalRadius" min="10" max="100" value="50">
+            <span id="totalRadiusValue">50</span>
+        </div>
+        <div class="slider-group">
+            <label for="coreRadius">コア(黄色)の半径:</label>
+            <input type="range" id="coreRadius" min="5" max="100" value="25">
+            <span id="coreRadiusValue">25</span>
+        </div>
+        <div class="slider-group">
+            <label for="coreContrast">コアの散乱コントラスト:</label>
+            <input type="range" id="coreContrast" min="-2" max="2" value="-0.5" step="0.1">
+            <span id="coreContrastValue">-0.5</span>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM要素 ---
+        const rodCanvas = document.getElementById('rodCanvas');
+        const rodCtx = rodCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        const rodLengthSlider = document.getElementById('rodLength');
+        const totalRadiusSlider = document.getElementById('totalRadius');
+        const coreRadiusSlider = document.getElementById('coreRadius');
+        const contrastSlider = document.getElementById('coreContrast');
+        const rodLengthValue = document.getElementById('rodLengthValue');
+        const totalRadiusValue = document.getElementById('totalRadiusValue');
+        const coreRadiusValue = document.getElementById('coreRadiusValue');
+        const contrastValue = document.getElementById('coreContrastValue');
+
+        const PARTICLE_DENSITY = 0.1;
+
+        // --- メインの更新関数 ---
+        function update() {
+            let length = parseInt(rodLengthSlider.value);
+            let totalR = parseInt(totalRadiusSlider.value);
+            let coreR = parseInt(coreRadiusSlider.value);
+            let coreContrast = parseFloat(contrastSlider.value);
+
+            if (coreR > totalR) {
+                coreR = totalR;
+                coreRadiusSlider.value = coreR;
+            }
+            coreRadiusSlider.max = totalR; 
+
+            rodLengthValue.textContent = length;
+            totalRadiusValue.textContent = totalR;
+            coreRadiusValue.textContent = coreR;
+            contrastValue.textContent = coreContrast.toFixed(1);
+
+            const points = generateRod(length, totalR, coreR, coreContrast);
+            const p_r_components = calculatePDDF(points, length);
+            
+            drawRod(length, totalR, coreR);
+            drawGraph(p_r_components, length);
+        }
+
+        // --- ロッドモデルの点群を生成 ---
+        function generateRod(length, totalRadius, coreRadius, coreContrast) {
+            const points = [];
+            const area = length * (totalRadius * 2);
+            const numPoints = Math.floor(area * PARTICLE_DENSITY);
+            const shellContrast = 1.0;
+
+            for (let i = 0; i < numPoints; i++) {
+                const yPos = (Math.random() - 0.5) * (totalRadius * 2);
+                const isCore = Math.abs(yPos) < coreRadius;
+                points.push({
+                    x: (Math.random() - 0.5) * length,
+                    y: yPos,
+                    type: isCore ? 'core' : 'shell',
+                    contrast: isCore ? coreContrast : shellContrast
+                });
+            }
+            return points;
+        }
+        
+        // --- p(r)関数を計算 ---
+        function calculatePDDF(points, d_max) {
+            const binSize = 2;
+            const numBins = Math.floor(d_max / binSize) + 1;
+            const histograms = {
+                cc: new Array(numBins).fill(0), // core-core
+                ss: new Array(numBins).fill(0), // shell-shell
+                cs: new Array(numBins).fill(0)  // core-shell
+            };
+
+            if (points.length < 2) return histograms;
+            
+            const sampleSize = 100000;
+            for (let k = 0; k < sampleSize; k++) {
+                const i = Math.floor(Math.random() * points.length);
+                const j = Math.floor(Math.random() * points.length);
+                if (i === j) continue;
+
+                const p1 = points[i];
+                const p2 = points[j];
+                const dist = Math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2);
+
+                if (dist < d_max) {
+                    const binIndex = Math.floor(dist / binSize);
+                    const contribution = p1.contrast * p2.contrast;
+                    if (p1.type === 'core' && p2.type === 'core') {
+                        histograms.cc[binIndex] += contribution;
+                    } else if (p1.type === 'shell' && p2.type === 'shell') {
+                        histograms.ss[binIndex] += contribution;
+                    } else {
+                        histograms.cs[binIndex] += contribution;
+                    }
+                }
+            }
+            return histograms;
+        }
+
+        // --- ロッドを描画 ---
+        function drawRod(length, totalRadius, coreRadius) {
+            const center = { x: rodCanvas.width / 2, y: rodCanvas.height / 2 };
+            rodCtx.clearRect(0, 0, rodCanvas.width, rodCanvas.height);
+            
+            // シェル
+            rodCtx.fillStyle = '#03a9f4';
+            rodCtx.fillRect(center.x - length/2, center.y - totalRadius, length, totalRadius * 2);
+
+            // コア
+            rodCtx.fillStyle = '#ffc107';
+            rodCtx.fillRect(center.x - length/2, center.y - coreRadius, length, coreRadius * 2);
+            
+            // 境界線
+            rodCtx.strokeStyle = 'rgba(0,0,0,0.2)';
+            rodCtx.strokeRect(center.x - length/2, center.y - totalRadius, length, totalRadius * 2);
+            rodCtx.strokeRect(center.x - length/2, center.y - coreRadius, length, coreRadius * 2);
+        }
+
+        // --- グラフを描画 ---
+        function drawGraph(p_r_components, d_max) {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            const padding = 40;
+            const chartWidth = graphCanvas.width - padding * 2;
+            const chartHeight = graphCanvas.height - padding * 2;
+
+            const total_p_r = p_r_components.cc.map((val, i) => val + p_r_components.ss[i] + p_r_components.cs[i]);
+            
+            let all_values = [].concat(p_r_components.cc, p_r_components.ss, p_r_components.cs, total_p_r);
+            const max_p = Math.max(...all_values, 0);
+            const min_p = Math.min(...all_values, 0);
+            const abs_max = Math.max(Math.abs(max_p), Math.abs(min_p));
+            if(abs_max === 0) return;
+
+            // X軸とY軸
+            graphCtx.strokeStyle = '#333';
+            graphCtx.beginPath();
+            graphCtx.moveTo(padding, padding + chartHeight / 2);
+            graphCtx.lineTo(padding + chartWidth, padding + chartHeight / 2); // X軸 (y=0)
+            graphCtx.moveTo(padding, padding);
+            graphCtx.lineTo(padding, padding + chartHeight); // Y軸
+            graphCtx.stroke();
+            
+            // ラベル
+            graphCtx.fillStyle = '#333';
+            graphCtx.textAlign = 'center';
+            graphCtx.fillText("距離 r", padding + chartWidth / 2, padding + chartHeight + 30);
+            graphCtx.save();
+            graphCtx.translate(15, padding + chartHeight / 2);
+            graphCtx.rotate(-Math.PI / 2);
+            graphCtx.fillText("p(r)", 0, 0);
+            graphCtx.restore();
+
+            const plot = (data, color, width = 1.5) => {
+                graphCtx.beginPath();
+                graphCtx.strokeStyle = color;
+                graphCtx.lineWidth = width;
+                data.forEach((value, index) => {
+                    const x = padding + (index * 2 / d_max) * chartWidth;
+                    const y = padding + chartHeight / 2 - (value / abs_max) * (chartHeight / 2);
+                    if (index === 0) graphCtx.moveTo(x, y);
+                    else graphCtx.lineTo(x, y);
+                });
+                graphCtx.stroke();
+            };
+
+            // 各成分を描画
+            plot(p_r_components.ss, '#03a9f4');
+            plot(p_r_components.cc, '#ffc107');
+            plot(p_r_components.cs, '#4caf50');
+
+            // 合計を描画
+            plot(total_p_r, '#e91e63', 3);
+
+            // Dmax
+            const dmax_x = padding + chartWidth;
+            graphCtx.beginPath();
+            graphCtx.moveTo(dmax_x, padding);
+            graphCtx.lineTo(dmax_x, padding + chartHeight);
+            graphCtx.setLineDash([5, 5]);
+            graphCtx.strokeStyle = '#673ab7';
+            graphCtx.stroke();
+            graphCtx.setLineDash([]);
+            graphCtx.fillStyle = '#673ab7';
+            graphCtx.fillText(`Dmax ≈ ${Math.round(d_max)}`, dmax_x, padding - 5);
+        }
+
+        // --- イベントリスナー ---
+        rodLengthSlider.addEventListener('input', update);
+        totalRadiusSlider.addEventListener('input', update);
+        coreRadiusSlider.addEventListener('input', update);
+        contrastSlider.addEventListener('input', update);
+
+        // --- 初期化 ---
+        update();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase Diagram Maker</title>
+    
+    <!-- React & ReactDOM (バージョン固定。無指定だと将来の自動更新で予告なく壊れるため) -->
+    <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel (for JSX) (無指定の"latest"がBabel 8系に切り替わり起動不能になったため、動作確認済みの7系に固定) -->
+    <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body { font-family: "Meiryo UI", sans-serif; }
+        /* SVGのスタイル調整 */
+        .lucide { vertical-align: middle; }
+        /* ドラッグ中のアイテムのスタイル */
+        .dragging { opacity: 0.5; background-color: #e2e8f0; }
+        /* グラフ上のカーソル */
+        .cursor-grab { cursor: grab; }
+        .cursor-grabbing { cursor: grabbing; }
+        /* 辺追加ハンドルのホバー効果 */
+        .edge-handle { opacity: 0; transition: opacity 0.2s; }
+        .edge-handle:hover, .group:hover .edge-handle { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- Icon Components (Simple SVG Wrappers) ---
+        const Icon = ({ children, size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`lucide ${className}`}>
+                {children}
+            </svg>
+        );
+
+        const Plus = (props) => <Icon {...props}><path d="M5 12h14"/><path d="M12 5v14"/></Icon>;
+        const Trash2 = (props) => <Icon {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></Icon>;
+        const Settings = (props) => <Icon {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.35a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
+        const Info = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></Icon>;
+        const Upload = (props) => <Icon {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></Icon>;
+        const Copy = (props) => <Icon {...props}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></Icon>;
+        const Save = (props) => <Icon {...props}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></Icon>;
+        const ImageIcon = (props) => <Icon {...props}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></Icon>;
+        const Layers = (props) => <Icon {...props}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Icon>;
+        const MapPin = (props) => <Icon {...props}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></Icon>;
+        const X = (props) => <Icon {...props}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>;
+        const TrendingUp = (props) => <Icon {...props}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></Icon>;
+        const RotateCcw = (props) => <Icon {...props}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/><path d="M3 3v9h9"/></Icon>;
+        const Check = (props) => <Icon {...props}><polyline points="20 6 9 17 4 12"/></Icon>;
+        const Sliders = (props) => <Icon {...props}><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/></Icon>;
+        const GripVertical = (props) => <Icon {...props}><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></Icon>;
+        const HelpCircle = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/></Icon>;
+        const ChevronDown = (props) => <Icon {...props}><polyline points="6 9 12 15 18 9"/></Icon>;
+        const ChevronRight = (props) => <Icon {...props}><polyline points="9 18 15 12 9 6"/></Icon>;
+
+        // --- Main App Component ---
+        const TernaryPlotMaker = () => {
+            // --- 初期設定とステート ---
+            const initialPoints = [
+                { id: 1, name: 'サンプル 1', a: 60, b: 20, c: 20, color: '#ef4444' },
+                { id: 2, name: 'サンプル 2', a: 30, b: 50, c: 20, color: '#3b82f6' },
+                { id: 3, name: 'サンプル 3', a: 10, b: 10, c: 80, color: '#22c55e' },
+            ];
+
+            const initialZones = [
+                {
+                id: 1,
+                name: 'ターゲット領域',
+                color: '#fbbf24',
+                opacity: 1.0,
+                autoSort: true, // 既存データ互換用
+                showStroke: true,
+                strokeWidth: 2,
+                dashed: false,
+                points: [
+                    { a: 40, b: 40, c: 20 },
+                    { a: 20, b: 60, c: 20 },
+                    { a: 20, b: 40, c: 40 },
+                ]
+                }
+            ];
+
+            const initialLines = [
+                {
+                id: 1,
+                name: '境界線例',
+                color: '#64748b',
+                width: 2,
+                dashed: true,
+                points: [
+                    { a: 50, b: 50, c: 0 },
+                    { a: 50, b: 0, c: 50 },
+                ]
+                }
+            ];
+
+            // プリセットカラー
+            const PRESET_COLORS = [
+                '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
+                '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef',
+                '#f43f5e', '#64748b', '#000000'
+            ];
+
+            const [points, setPoints] = useState(initialPoints);
+            const [zones, setZones] = useState(initialZones);
+            const [lines, setLines] = useState(initialLines);
+            const [labels, setLabels] = useState({ a: '成分 A', b: '成分 B', c: '成分 C' });
+            // Visual Settings State
+            const [visualSettings, setVisualSettings] = useState({
+                frameWidth: 2,
+                fontSize: 14,
+                showGrid: true // グリッド表示設定
+            });
+
+            // Accordion States (デフォルトは閉じて縦幅を確保)
+            const [isAxisSettingsOpen, setIsAxisSettingsOpen] = useState(false);
+            const [isVisualSettingsOpen, setIsVisualSettingsOpen] = useState(false);
+
+            const [activeTab, setActiveTab] = useState('points'); // 'points' | 'zones' | 'lines' | 'help'
+            
+            // 編集中のアイテムID
+            const [editingId, setEditingId] = useState(null);
+
+            // ポイント追加用ステート
+            const [newPoint, setNewPoint] = useState({ name: '', a: '', b: '', c: '', color: '#ef4444' });
+            
+            // 領域追加用ステート
+            const [newZone, setNewZone] = useState({ 
+                name: '', 
+                color: '#fbbf24', 
+                opacity: 1.0, 
+                autoSort: true,
+                showStroke: true,
+                strokeWidth: 2,
+                dashed: false
+            });
+            const [newZonePoint, setNewZonePoint] = useState({ a: '', b: '', c: '' });
+            const [tempZonePoints, setTempZonePoints] = useState([]);
+
+            // 線追加用ステート
+            const [newLine, setNewLine] = useState({ name: '', color: '#64748b', width: 2, dashed: false });
+            const [newLinePoint, setNewLinePoint] = useState({ a: '', b: '', c: '' });
+            const [tempLinePoints, setTempLinePoints] = useState([]);
+
+            const [hoveredPoint, setHoveredPoint] = useState(null);
+            
+            // Drag and Drop State (List)
+            const [draggedIndex, setDraggedIndex] = useState(null);
+            
+            // Graph Drag State (Vertices)
+            const [graphDragIndex, setGraphDragIndex] = useState(null);
+
+            const fileInputRef = useRef(null);
+            const svgRef = useRef(null);
+
+            // SVGの設定
+            const size = 500;
+            
+            // 成分名の長さとフォントサイズに合わせてパディングを自動調整
+            const maxLabelLen = Math.max(
+                (labels.a || "").length, 
+                (labels.b || "").length, 
+                (labels.c || "").length
+            );
+            const currentFontSize = visualSettings.fontSize || 14;
+            // パディングの計算式を調整（初期値を抑え、文字数に応じて適切に拡張）
+            // 80pxをベースに、4文字を超えた分だけ拡張
+            const padding = 80 + Math.max(0, maxLabelLen - 4) * (currentFontSize * 0.8);
+
+            const height = size * Math.sqrt(3) / 2;
+            const plotWidth = size;
+            const plotHeight = height;
+
+            // 頂点の座標 (上: A, 左下: B, 右下: C)
+            const vertexA = { x: plotWidth / 2, y: 0 };
+            const vertexB = { x: 0, y: plotHeight };
+            const vertexC = { x: plotWidth, y: plotHeight };
+
+            // --- 編集モードのリセット (タブ切り替え時) ---
+            useEffect(() => {
+                handleCancelEdit();
+            }, [activeTab]);
+
+            // --- ヘルパー関数 ---
+
+            // 3成分からXY座標を計算する関数
+            const getCoordinates = (a, b, c) => {
+                const sum = Number(a) + Number(b) + Number(c);
+                if (sum === 0) return { x: plotWidth / 2, y: plotHeight / 2 };
+
+                const fa = Number(a) / sum;
+                const fb = Number(b) / sum;
+                const fc = Number(c) / sum;
+
+                const x = fa * vertexA.x + fb * vertexB.x + fc * vertexC.x;
+                const y = fa * vertexA.y + fb * vertexB.y + fc * vertexC.y;
+
+                return { x, y, fa, fb, fc, sum };
+            };
+
+            // XY座標から3成分を逆算する関数
+            const getInverseCoordinates = (x, y) => {
+                // Y座標からA成分を計算
+                const clampedY = Math.max(0, Math.min(height, y));
+                let fa = 1 - clampedY / height;
+
+                // B成分の計算
+                let fb = 0.5 + clampedY / (2 * height) - x / size;
+
+                // C成分
+                let fc = 1 - fa - fb;
+
+                // 負の値を補正（範囲外の場合）
+                if (fa < 0) fa = 0;
+                if (fb < 0) fb = 0;
+                if (fc < 0) fc = 0;
+
+                // 正規化
+                const sum = fa + fb + fc;
+                if (sum > 0) {
+                    fa /= sum;
+                    fb /= sum;
+                    fc /= sum;
+                }
+
+                return { 
+                    a: Math.round(fa * 100), 
+                    b: Math.round(fb * 100), 
+                    c: Math.round(fc * 100) 
+                };
+            };
+
+            // 領域の頂点を重心周りにソートする関数 (元のインデックスを保持)
+            const getSortedZonePoints = (zonePoints) => {
+                // 元のインデックス情報を付加
+                const indexedPoints = zonePoints.map((p, idx) => ({...p, originalIndex: idx}));
+
+                if (zonePoints.length < 3) {
+                    return indexedPoints.map(p => {
+                        const c = getCoordinates(p.a, p.b, p.c);
+                        return { ...p, x: c.x, y: c.y };
+                    });
+                }
+
+                // 座標計算
+                const pointsWithCoords = indexedPoints.map(p => {
+                    const c = getCoordinates(p.a, p.b, p.c);
+                    return { ...p, x: c.x, y: c.y };
+                });
+
+                // 重心計算
+                const cx = pointsWithCoords.reduce((sum, p) => sum + p.x, 0) / pointsWithCoords.length;
+                const cy = pointsWithCoords.reduce((sum, p) => sum + p.y, 0) / pointsWithCoords.length;
+
+                // 角度でソート
+                pointsWithCoords.sort((a, b) => {
+                    const angleA = Math.atan2(a.y - cy, a.x - cx);
+                    const angleB = Math.atan2(b.y - cy, b.x - cx);
+                    return angleA - angleB;
+                });
+
+                return pointsWithCoords;
+            };
+
+            const handleCancelEdit = () => {
+                setEditingId(null);
+                setNewPoint({ name: '', a: '', b: '', c: '', color: '#ef4444' });
+                setNewZone({ name: '', color: '#fbbf24', opacity: 1.0, autoSort: true, showStroke: true, strokeWidth: 2, dashed: false });
+                setTempZonePoints([]);
+                setNewLine({ name: '', color: '#64748b', width: 2, dashed: false });
+                setTempLinePoints([]);
+            };
+
+            // ポイント操作
+            const handleAddPoint = () => {
+                if (newPoint.name && (newPoint.a !== '' || newPoint.b !== '' || newPoint.c !== '')) {
+                const pointData = {
+                    ...newPoint,
+                    a: Number(newPoint.a) || 0,
+                    b: Number(newPoint.b) || 0,
+                    c: Number(newPoint.c) || 0
+                };
+
+                if (editingId) {
+                    setPoints(points.map(p => p.id === editingId ? { ...pointData, id: editingId } : p));
+                    setEditingId(null);
+                } else {
+                    setPoints([...points, { ...pointData, id: Date.now() }]);
+                }
+                setNewPoint(prev => ({ ...prev, name: '', a: '', b: '', c: '' }));
+                }
+            };
+
+            const handleEditPoint = (point) => {
+                setNewPoint({ ...point });
+                setEditingId(point.id);
+            };
+
+            const handleDeletePoint = (id, e) => {
+                e.stopPropagation();
+                setPoints(points.filter(p => p.id !== id));
+                if (editingId === id) handleCancelEdit();
+            };
+
+            // 領域操作
+            const handleAddZonePoint = () => {
+                if (newZonePoint.a !== '' || newZonePoint.b !== '' || newZonePoint.c !== '') {
+                setTempZonePoints([...tempZonePoints, {
+                    id: Date.now(),
+                    a: Number(newZonePoint.a) || 0,
+                    b: Number(newZonePoint.b) || 0,
+                    c: Number(newZonePoint.c) || 0
+                }]);
+                setNewZonePoint({ a: '', b: '', c: '' });
+                }
+            };
+
+            const handleRemoveTempZonePoint = (id) => {
+                setTempZonePoints(tempZonePoints.filter(p => p.id !== id));
+            };
+
+            // ドラッグアンドドロップハンドラ (リスト)
+            const onDragStart = (e, index) => {
+                setDraggedIndex(index);
+                e.dataTransfer.effectAllowed = "move";
+            };
+
+            const onDragEnter = (e, index) => {
+                if (draggedIndex === null || draggedIndex === index) return;
+                
+                const newPoints = [...tempZonePoints];
+                const draggedItem = newPoints[draggedIndex];
+                newPoints.splice(draggedIndex, 1);
+                newPoints.splice(index, 0, draggedItem);
+                
+                setTempZonePoints(newPoints);
+                setDraggedIndex(index);
+            };
+
+            const onDragEnd = () => {
+                setDraggedIndex(null);
+            };
+
+            // --- グラフ上のドラッグ操作 & 頂点追加 ---
+            const handleGraphDragStart = (index, e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setGraphDragIndex(index);
+            };
+
+            const handleGraphAddVertex = (e, index) => {
+                e.stopPropagation();
+                e.preventDefault();
+
+                const svgRect = svgRef.current.getBoundingClientRect();
+                const scaleX = (size + padding * 2) / svgRect.width;
+                const scaleY = (height + padding * 2) / svgRect.height;
+                const mouseX = (e.clientX - svgRect.left) * scaleX - padding;
+                const mouseY = (e.clientY - svgRect.top) * scaleY - padding;
+                
+                const newComps = getInverseCoordinates(mouseX, mouseY);
+                const newPoint = { 
+                    id: Math.random(), 
+                    ...newComps 
+                };
+
+                if (activeTab === 'zones') {
+                    const newPoints = [...tempZonePoints];
+                    if (newZone.autoSort) {
+                        newPoints.push(newPoint);
+                        setTempZonePoints(newPoints);
+                        setGraphDragIndex(newPoints.length - 1); 
+                    } else {
+                        newPoints.splice(index + 1, 0, newPoint);
+                        setTempZonePoints(newPoints);
+                        setGraphDragIndex(index + 1);
+                    }
+                } else if (activeTab === 'lines') {
+                    const newPoints = [...tempLinePoints];
+                    // 線は常に手動順序なので、指定インデックスの次に追加
+                    newPoints.splice(index + 1, 0, newPoint);
+                    setTempLinePoints(newPoints);
+                    setGraphDragIndex(index + 1);
+                }
+            };
+
+            const handleSvgMouseMove = (e) => {
+                if (graphDragIndex === null) return;
+                
+                const svgRect = svgRef.current.getBoundingClientRect();
+                const scaleX = (size + padding * 2) / svgRect.width;
+                const scaleY = (height + padding * 2) / svgRect.height;
+                const mouseX = (e.clientX - svgRect.left) * scaleX - padding;
+                const mouseY = (e.clientY - svgRect.top) * scaleY - padding;
+                
+                const newComps = getInverseCoordinates(mouseX, mouseY);
+                
+                if (activeTab === 'zones') {
+                    const newPoints = [...tempZonePoints];
+                    if (newPoints[graphDragIndex]) {
+                        newPoints[graphDragIndex] = { 
+                            ...newPoints[graphDragIndex], 
+                            ...newComps 
+                        };
+                        setTempZonePoints(newPoints);
+                    }
+                } else if (activeTab === 'lines') {
+                    const newPoints = [...tempLinePoints];
+                    if (newPoints[graphDragIndex]) {
+                        newPoints[graphDragIndex] = {
+                            ...newPoints[graphDragIndex],
+                            ...newComps
+                        };
+                        setTempLinePoints(newPoints);
+                    }
+                }
+            };
+
+            const handleSvgMouseUp = () => {
+                setGraphDragIndex(null);
+            };
+
+            const handleAddZone = () => {
+                if (newZone.name && tempZonePoints.length >= 3) {
+                const zoneData = {
+                    ...newZone,
+                    points: tempZonePoints
+                };
+
+                if (editingId) {
+                    setZones(zones.map(z => z.id === editingId ? { ...zoneData, id: editingId } : z));
+                    setEditingId(null);
+                } else {
+                    setZones([...zones, { ...zoneData, id: Date.now() }]);
+                }
+                setNewZone(prev => ({ ...prev, name: '', autoSort: true }));
+                setTempZonePoints([]);
+                }
+            };
+
+            const handleEditZone = (zone) => {
+                setActiveTab('zones');
+                setNewZone({ 
+                    name: zone.name, 
+                    color: zone.color, 
+                    opacity: zone.opacity,
+                    autoSort: zone.autoSort !== undefined ? zone.autoSort : true,
+                    showStroke: zone.showStroke !== undefined ? zone.showStroke : true,
+                    strokeWidth: zone.strokeWidth || 2,
+                    dashed: zone.dashed || false
+                });
+                setTempZonePoints(zone.points.map(p => ({ ...p, id: Math.random() })));
+                setEditingId(zone.id);
+            };
+
+            const handleDeleteZone = (id, e) => {
+                e.stopPropagation();
+                setZones(zones.filter(z => z.id !== id));
+                if (editingId === id) handleCancelEdit();
+            };
+
+            // 線操作
+            const handleAddLinePoint = () => {
+                if (newLinePoint.a !== '' || newLinePoint.b !== '' || newLinePoint.c !== '') {
+                setTempLinePoints([...tempLinePoints, {
+                    id: Date.now(),
+                    a: Number(newLinePoint.a) || 0,
+                    b: Number(newLinePoint.b) || 0,
+                    c: Number(newLinePoint.c) || 0
+                }]);
+                setNewLinePoint({ a: '', b: '', c: '' });
+                }
+            };
+
+            const handleRemoveTempLinePoint = (id) => {
+                setTempLinePoints(tempLinePoints.filter(p => p.id !== id));
+            };
+
+            const handleAddLine = () => {
+                if (newLine.name && tempLinePoints.length >= 2) {
+                const lineData = {
+                    ...newLine,
+                    points: tempLinePoints
+                };
+
+                if (editingId) {
+                    setLines(lines.map(l => l.id === editingId ? { ...lineData, id: editingId } : l));
+                    setEditingId(null);
+                } else {
+                    setLines([...lines, { ...lineData, id: Date.now() }]);
+                }
+                setNewLine(prev => ({ ...prev, name: '' }));
+                setTempLinePoints([]);
+                }
+            };
+
+            const handleEditLine = (line) => {
+                setActiveTab('lines');
+                setNewLine({ name: line.name, color: line.color, width: line.width, dashed: line.dashed });
+                setTempLinePoints(line.points.map(p => ({ ...p, id: Math.random() })));
+                setEditingId(line.id);
+            };
+
+            const handleDeleteLine = (id, e) => {
+                e.stopPropagation();
+                setLines(lines.filter(l => l.id !== id));
+                if (editingId === id) handleCancelEdit();
+            };
+
+            // --- ファイル保存・読み込み機能 ---
+
+            const handleSaveJSON = () => {
+                const data = { points, zones, lines, labels, visualSettings, timestamp: new Date().toISOString() };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ternary-plot-data.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            const handleLoadJSON = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.labels) {
+                        setPoints(data.points || []);
+                        setZones(data.zones || []); 
+                        setLines(data.lines || []);
+                        setLabels(data.labels);
+                        if (data.visualSettings) {
+                            setVisualSettings({
+                                frameWidth: 2,
+                                fontSize: 14,
+                                showGrid: true,
+                                ...data.visualSettings
+                            });
+                        }
+                        handleCancelEdit(); // リセット
+                    } else {
+                        alert('無効なデータ形式です');
+                    }
+                    } catch (err) {
+                    alert('ファイルの読み込みに失敗しました');
+                    }
+                };
+                reader.readAsText(file);
+                }
+                event.target.value = ''; // Reset input
+            };
+
+            // --- 画像エクスポート機能 ---
+
+            const generateImage = (callback) => {
+                if (!svgRef.current) return;
+
+                // SVGのサイズ情報を計算
+                const viewBoxWidth = size + padding * 2;
+                const viewBoxHeight = height + padding * 2;
+                const scale = 4; // 高解像度出力用スケール
+
+                // SVG要素をクローンして、画像化用のサイズ属性を明示的に設定
+                const clonedSvg = svgRef.current.cloneNode(true);
+                clonedSvg.setAttribute("width", viewBoxWidth);
+                clonedSvg.setAttribute("height", viewBoxHeight);
+                const svgData = new XMLSerializer().serializeToString(clonedSvg);
+
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+                const img = new Image();
+
+                canvas.width = viewBoxWidth * scale;
+                canvas.height = viewBoxHeight * scale;
+
+                // 背景を透明にするため、白の塗りつぶしを削除し、クリアする
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+                const url = URL.createObjectURL(svgBlob);
+
+                img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                callback(canvas);
+                URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            };
+
+            const handleCopyImage = () => {
+                generateImage((canvas) => {
+                canvas.toBlob((blob) => {
+                    // そもそも navigator.clipboard がない、または write がない場合
+                    if (!navigator.clipboard || !navigator.clipboard.write) {
+                            alert("お使いの環境ではクリップボードへの画像コピーがサポートされていません。「画像保存」をご利用ください。");
+                            return;
+                    }
+
+                    try {
+                    const item = new ClipboardItem({ "image/png": blob });
+                    navigator.clipboard.write([item]).then(() => {
+                        alert("クリップボードにコピーしました！");
+                    }).catch((err) => {
+                        console.warn("Clipboard write failed (likely due to permissions):", err);
+                        alert("画像のコピーに失敗しました（ブラウザのセキュリティ制限など）。\n右隣の「画像保存」ボタンからファイルをダウンロードしてください。");
+                    });
+                    } catch (err) {
+                    console.warn("Clipboard API not supported or blocked:", err);
+                    alert("この環境では画像のコピー機能が使えません。\n右隣の「画像保存」ボタンからファイルをダウンロードしてください。");
+                    }
+                });
+                });
+            };
+
+            const handleDownloadImage = () => {
+                generateImage((canvas) => {
+                const link = document.createElement('a');
+                link.download = 'ternary-plot.png';
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+                });
+            };
+
+            // --- SVG描画用コンポーネント ---
+
+            const GridLines = () => {
+                const lines = [];
+                for (let i = 1; i < 10; i++) {
+                const f = i / 10;
+
+                // A一定の線
+                const ax1 = f * vertexA.x + (1 - f) * vertexB.x;
+                const ay1 = f * vertexA.y + (1 - f) * vertexB.y;
+                const ax2 = f * vertexA.x + (1 - f) * vertexC.x;
+                const ay2 = f * vertexA.y + (1 - f) * vertexC.y;
+                lines.push(<line key={`a-${i}`} x1={ax1} y1={ay1} x2={ax2} y2={ay2} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />);
+
+                // B一定の線
+                const bx1 = f * vertexB.x + (1 - f) * vertexC.x;
+                const by1 = f * vertexB.y + (1 - f) * vertexC.y;
+                const bx2 = f * vertexB.x + (1 - f) * vertexA.x;
+                const by2 = f * vertexB.y + (1 - f) * vertexA.y;
+                lines.push(<line key={`b-${i}`} x1={bx1} y1={by1} x2={bx2} y2={by2} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />);
+
+                // C一定の線
+                const cx1 = f * vertexC.x + (1 - f) * vertexA.x;
+                const cy1 = f * vertexC.y + (1 - f) * vertexA.y;
+                const cx2 = f * vertexC.x + (1 - f) * vertexB.x;
+                const cy2 = f * vertexC.y + (1 - f) * vertexB.y;
+                lines.push(<line key={`c-${i}`} x1={cx1} y1={cy1} x2={cx2} y2={cy2} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />);
+                }
+                return <g>{lines}</g>;
+            };
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-50 text-slate-900 overflow-hidden" style={{ fontFamily: '"Meiryo UI", sans-serif' }}>
+                {/* Header */}
+                <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
+                    <div className="flex items-center gap-2">
+                    <div className="bg-indigo-600 p-2 rounded-lg">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3l-9 18h18z" />
+                        <circle cx="12" cy="10" r="1.5" fill="white" stroke="none"/>
+                        <circle cx="8" cy="17" r="1.5" fill="white" stroke="none"/>
+                        <circle cx="16" cy="17" r="1.5" fill="white" stroke="none"/>
+                        </svg>
+                    </div>
+                    <h1 className="text-lg font-bold text-slate-800">Phase Diagram Maker</h1>
+                    </div>
+                    
+                    {/* Actions Toolbar */}
+                    <div className="flex items-center gap-2">
+                    <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 mr-2">
+                        <button 
+                        onClick={handleSaveJSON} 
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-indigo-600 rounded transition-all shadow-sm"
+                        title="データをJSONファイルとして保存"
+                        >
+                        <Save size={14} />
+                        設定保存
+                        </button>
+                        <button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white hover:text-indigo-600 rounded transition-all shadow-sm"
+                        title="保存したJSONファイルを読み込む"
+                        >
+                        <Upload size={14} />
+                        設定読込
+                        </button>
+                        <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleLoadJSON} 
+                        accept=".json" 
+                        className="hidden" 
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-indigo-50 p-1 rounded-lg border border-indigo-100">
+                        <button 
+                        onClick={handleCopyImage} 
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-white hover:text-indigo-900 rounded transition-all shadow-sm"
+                        >
+                        <Copy size={14} />
+                        コピー
+                        </button>
+                        <button 
+                        onClick={handleDownloadImage} 
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-white hover:text-indigo-900 rounded transition-all shadow-sm"
+                        >
+                        <ImageIcon size={14} />
+                        画像保存
+                        </button>
+                    </div>
+                    </div>
+                </header>
+
+                {/* Main Content */}
+                <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+                    
+                    {/* Left Panel: Inputs */}
+                    <div className="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col shrink-0 z-10 overflow-hidden">
+                    
+                    {/* Tabs */}
+                    <div className="flex border-b border-slate-200 flex-none overflow-x-auto">
+                        <button
+                        onClick={() => setActiveTab('points')}
+                        className={`flex-1 py-3 px-2 text-sm font-medium flex items-center justify-center gap-2 min-w-[80px] ${activeTab === 'points' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                        <MapPin size={16} />
+                        点
+                        </button>
+                        <button
+                        onClick={() => setActiveTab('lines')}
+                        className={`flex-1 py-3 px-2 text-sm font-medium flex items-center justify-center gap-2 min-w-[80px] ${activeTab === 'lines' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                        <TrendingUp size={16} />
+                        線
+                        </button>
+                        <button
+                        onClick={() => setActiveTab('zones')}
+                        className={`flex-1 py-3 px-2 text-sm font-medium flex items-center justify-center gap-2 min-w-[80px] ${activeTab === 'zones' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                        <Layers size={16} />
+                        領域
+                        </button>
+                        <button
+                        onClick={() => setActiveTab('help')}
+                        className={`flex-1 py-3 px-2 text-sm font-medium flex items-center justify-center gap-2 min-w-[80px] ${activeTab === 'help' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                        <HelpCircle size={16} />
+                        説明
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto flex flex-col">
+                        {activeTab === 'points' && (
+                            /* Points Tab Content */
+                            <>
+                            {/* Axis Settings */}
+                            <div className="border-b border-slate-100">
+                                <button 
+                                    className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+                                    onClick={() => setIsAxisSettingsOpen(!isAxisSettingsOpen)}
+                                >
+                                    <h2 className="text-sm font-semibold text-slate-500 flex items-center gap-2">
+                                        <Settings size={16} />
+                                        軸ラベルの設定
+                                    </h2>
+                                    {isAxisSettingsOpen ? <ChevronDown size={16} className="text-slate-400"/> : <ChevronRight size={16} className="text-slate-400"/>}
+                                </button>
+                                {isAxisSettingsOpen && (
+                                    <div className="px-4 pb-4 grid grid-cols-1 gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-4 h-4 rounded-full border border-slate-300 bg-slate-100 flex items-center justify-center text-[10px] font-bold">A</span>
+                                            <input 
+                                            type="text" 
+                                            value={labels.a}
+                                            onChange={(e) => setLabels({...labels, a: e.target.value})}
+                                            className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-4 h-4 rounded-full border border-slate-300 bg-slate-100 flex items-center justify-center text-[10px] font-bold">B</span>
+                                            <input 
+                                            type="text" 
+                                            value={labels.b}
+                                            onChange={(e) => setLabels({...labels, b: e.target.value})}
+                                            className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-4 h-4 rounded-full border border-slate-300 bg-slate-100 flex items-center justify-center text-[10px] font-bold">C</span>
+                                            <input 
+                                            type="text" 
+                                            value={labels.c}
+                                            onChange={(e) => setLabels({...labels, c: e.target.value})}
+                                            className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Visual Settings */}
+                            <div className="border-b border-slate-100">
+                                <button 
+                                    className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+                                    onClick={() => setIsVisualSettingsOpen(!isVisualSettingsOpen)}
+                                >
+                                    <h2 className="text-sm font-semibold text-slate-500 flex items-center gap-2">
+                                        <Sliders size={16} />
+                                        表示スタイルの設定
+                                    </h2>
+                                    {isVisualSettingsOpen ? <ChevronDown size={16} className="text-slate-400"/> : <ChevronRight size={16} className="text-slate-400"/>}
+                                </button>
+                                {isVisualSettingsOpen && (
+                                    <div className="px-4 pb-4 space-y-3">
+                                        <div>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <label className="text-xs text-slate-500">外枠の太さ</label>
+                                                <span className="text-xs text-slate-700">{visualSettings.frameWidth}px</span>
+                                            </div>
+                                            <input 
+                                                type="range" 
+                                                min="1" 
+                                                max="10" 
+                                                value={visualSettings.frameWidth} 
+                                                onChange={(e) => setVisualSettings({...visualSettings, frameWidth: Number(e.target.value)})} 
+                                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <label className="text-xs text-slate-500">成分ラベル文字サイズ</label>
+                                                <span className="text-xs text-slate-700">{visualSettings.fontSize}px</span>
+                                            </div>
+                                            <input 
+                                                type="range" 
+                                                min="10" 
+                                                max="40" 
+                                                value={visualSettings.fontSize} 
+                                                onChange={(e) => setVisualSettings({...visualSettings, fontSize: Number(e.target.value)})} 
+                                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={visualSettings.showGrid}
+                                                    onChange={(e) => setVisualSettings({...visualSettings, showGrid: e.target.checked})}
+                                                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                                                />
+                                                <span>グリッド線を表示</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Add/Edit Point */}
+                            <div className={`p-4 border-b border-slate-100 ${editingId ? 'bg-orange-50' : 'bg-slate-50'}`}>
+                                <div className="flex items-center justify-between mb-3">
+                                <h2 className={`text-sm font-semibold flex items-center gap-2 ${editingId ? 'text-orange-600' : 'text-slate-500'}`}>
+                                    {editingId ? <RotateCcw size={16} /> : <Plus size={16} />}
+                                    {editingId ? 'データを編集' : '新規データ追加'}
+                                </h2>
+                                {editingId && (
+                                    <button onClick={handleCancelEdit} className="text-xs text-slate-500 hover:text-slate-800 underline">
+                                    キャンセル
+                                    </button>
+                                )}
+                                </div>
+
+                                <div className="space-y-3">
+                                <input 
+                                    type="text" 
+                                    placeholder="データ名" 
+                                    value={newPoint.name}
+                                    onChange={(e) => setNewPoint({...newPoint, name: e.target.value})}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-indigo-500"
+                                />
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                    <label className="text-xs text-slate-500 block mb-1">{labels.a}</label>
+                                    <input 
+                                        type="number" 
+                                        placeholder="0"
+                                        value={newPoint.a}
+                                        onChange={(e) => setNewPoint({...newPoint, a: e.target.value})}
+                                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    </div>
+                                    <div>
+                                    <label className="text-xs text-slate-500 block mb-1">{labels.b}</label>
+                                    <input 
+                                        type="number" 
+                                        placeholder="0"
+                                        value={newPoint.b}
+                                        onChange={(e) => setNewPoint({...newPoint, b: e.target.value})}
+                                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    </div>
+                                    <div>
+                                    <label className="text-xs text-slate-500 block mb-1">{labels.c}</label>
+                                    <input 
+                                        type="number" 
+                                        placeholder="0"
+                                        value={newPoint.c}
+                                        onChange={(e) => setNewPoint({...newPoint, c: e.target.value})}
+                                        className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    </div>
+                                </div>
+                                
+                                {/* Color Palette */}
+                                <div>
+                                    <label className="text-xs text-slate-500 block mb-1">カラー選択</label>
+                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {PRESET_COLORS.map(c => (
+                                        <button
+                                        key={c}
+                                        onClick={() => setNewPoint({...newPoint, color: c})}
+                                        className={`w-5 h-5 rounded-full border border-slate-200 transition-transform hover:scale-110 ${newPoint.color === c ? 'ring-2 ring-offset-1 ring-indigo-500' : ''}`}
+                                        style={{ backgroundColor: c }}
+                                        title={c}
+                                        />
+                                    ))}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                    <input 
+                                        type="color" 
+                                        value={newPoint.color}
+                                        onChange={(e) => setNewPoint({...newPoint, color: e.target.value})}
+                                        className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                                    />
+                                    <button 
+                                        onClick={handleAddPoint}
+                                        disabled={!newPoint.name}
+                                        className={`flex-1 text-white py-1.5 px-4 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                                    >
+                                        {editingId ? '更新する' : '追加する'}
+                                    </button>
+                                    </div>
+                                </div>
+
+                                </div>
+                            </div>
+
+                            {/* Points List */}
+                            <div className="flex-1 p-4 overflow-y-auto">
+                                <div className="flex items-center justify-between mb-2">
+                                <h2 className="text-sm font-semibold text-slate-500">データリスト ({points.length})</h2>
+                                {points.length > 0 && (
+                                    <button onClick={() => setPoints([])} className="text-xs text-red-500 hover:text-red-700 hover:underline">
+                                    全て削除
+                                    </button>
+                                )}
+                                </div>
+                                
+                                <div className="space-y-2">
+                                {points.map((point) => {
+                                    const sum = Number(point.a) + Number(point.b) + Number(point.c);
+                                    const aPct = sum ? Math.round((point.a / sum) * 100) : 0;
+                                    const bPct = sum ? Math.round((point.b / sum) * 100) : 0;
+                                    const cPct = sum ? Math.round((point.c / sum) * 100) : 0;
+
+                                    return (
+                                    <div 
+                                        key={point.id} 
+                                        onClick={() => handleEditPoint(point)}
+                                        className={`group border rounded-lg p-3 hover:shadow-sm transition-all flex items-start justify-between cursor-pointer ${editingId === point.id ? 'bg-orange-50 border-orange-300 ring-1 ring-orange-300' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
+                                        onMouseEnter={() => setHoveredPoint(point.id)}
+                                        onMouseLeave={() => setHoveredPoint(null)}
+                                    >
+                                        <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: point.color }}></div>
+                                            <span className="font-medium text-sm text-slate-700">{point.name}</span>
+                                            {editingId === point.id && <span className="text-[10px] bg-orange-200 text-orange-800 px-1 rounded">編集中</span>}
+                                        </div>
+                                        <div className="text-xs text-slate-500 font-mono">
+                                            A:{aPct} B:{bPct} C:{cPct}
+                                        </div>
+                                        </div>
+                                        <button 
+                                        onClick={(e) => handleDeletePoint(point.id, e)}
+                                        className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                        <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                    );
+                                })}
+                                </div>
+                            </div>
+                            </>
+                        )}
+                        
+                        {activeTab === 'lines' && (
+                            /* Lines Tab Content */
+                            <>
+                            {/* Add/Edit Line */}
+                            <div className={`p-4 border-b border-slate-100 ${editingId ? 'bg-orange-50' : 'bg-slate-50'}`}>
+                                <div className="flex items-center justify-between mb-3">
+                                <h2 className={`text-sm font-semibold flex items-center gap-2 ${editingId ? 'text-orange-600' : 'text-slate-500'}`}>
+                                    {editingId ? <RotateCcw size={16} /> : <Plus size={16} />}
+                                    {editingId ? 'データ線 (Line) を編集' : '新規データ線 (Line) 作成'}
+                                </h2>
+                                {editingId && (
+                                    <button onClick={handleCancelEdit} className="text-xs text-slate-500 hover:text-slate-800 underline">
+                                    キャンセル
+                                    </button>
+                                )}
+                                </div>
+                                <div className="space-y-3">
+                                <div className="flex flex-col gap-2">
+                                    <input 
+                                    type="text" 
+                                    placeholder="線の名前 (例: トレンドライン)" 
+                                    value={newLine.name}
+                                    onChange={(e) => setNewLine({...newLine, name: e.target.value})}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-indigo-500"
+                                    />
+                                    
+                                    {/* Line Color Palette */}
+                                    <div>
+                                    <label className="text-xs text-slate-500 block mb-1">線の色</label>
+                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                        {PRESET_COLORS.map(c => (
+                                        <button
+                                            key={c}
+                                            onClick={() => setNewLine({...newLine, color: c})}
+                                            className={`w-5 h-5 rounded-full border border-slate-200 transition-transform hover:scale-110 ${newLine.color === c ? 'ring-2 ring-offset-1 ring-indigo-500' : ''}`}
+                                            style={{ backgroundColor: c }}
+                                            title={c}
+                                        />
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2 items-center flex-wrap">
+                                        <input 
+                                        type="color" 
+                                        value={newLine.color}
+                                        onChange={(e) => setNewLine({...newLine, color: e.target.value})}
+                                        className="w-10 h-10 rounded cursor-pointer border-0 p-0"
+                                        />
+                                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                                        <span className="text-xs text-slate-500">太さ:</span>
+                                        <input 
+                                            type="range" 
+                                            min="1" 
+                                            max="8" 
+                                            step="0.5" 
+                                            value={newLine.width}
+                                            onChange={(e) => setNewLine({...newLine, width: parseFloat(e.target.value)})}
+                                            className="w-20"
+                                        />
+                                        <span className="text-xs text-slate-700 w-4 text-center">{newLine.width}</span>
+                                        </div>
+                                        <label className="flex items-center gap-1 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-2 py-1 cursor-pointer">
+                                        <input 
+                                            type="checkbox"
+                                            checked={newLine.dashed}
+                                            onChange={(e) => setNewLine({...newLine, dashed: e.target.checked})}
+                                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        点線
+                                        </label>
+                                    </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-3 rounded border border-slate-200">
+                                    <h3 className="text-xs font-semibold text-slate-500 mb-2">通過点を追加 ({tempLinePoints.length}点)</h3>
+                                    <div className="grid grid-cols-3 gap-2 mb-2">
+                                    <input 
+                                        type="number" placeholder={labels.a} value={newLinePoint.a}
+                                        onChange={(e) => setNewLinePoint({...newLinePoint, a: e.target.value})}
+                                        className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    <input 
+                                        type="number" placeholder={labels.b} value={newLinePoint.b}
+                                        onChange={(e) => setNewLinePoint({...newLinePoint, b: e.target.value})}
+                                        className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    <input 
+                                        type="number" placeholder={labels.c} value={newLinePoint.c}
+                                        onChange={(e) => setNewLinePoint({...newLinePoint, c: e.target.value})}
+                                        className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    </div>
+                                    <button 
+                                    onClick={handleAddLinePoint}
+                                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 rounded text-xs font-medium transition-colors"
+                                    >
+                                    頂点をリストに追加
+                                    </button>
+
+                                    {/* Temporary Points List */}
+                                    {tempLinePoints.length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                        {tempLinePoints.map((p, idx) => (
+                                        <div key={p.id} className="flex justify-between items-center text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded">
+                                            <span>点{idx+1}: A{p.a}, B{p.b}, C{p.c}</span>
+                                            <button onClick={() => handleRemoveTempLinePoint(p.id)} className="text-slate-400 hover:text-red-500"><X size={12}/></button>
+                                        </div>
+                                        ))}
+                                    </div>
+                                    )}
+                                </div>
+
+                                <button 
+                                    onClick={handleAddLine}
+                                    disabled={!newLine.name || tempLinePoints.length < 2}
+                                    className={`w-full text-white py-1.5 px-4 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                                >
+                                    {editingId ? '線を更新する' : '線を確定して追加'}
+                                </button>
+                                </div>
+                            </div>
+
+                            {/* Lines List */}
+                            <div className="flex-1 p-4 overflow-y-auto">
+                                <div className="flex items-center justify-between mb-2">
+                                <h2 className="text-sm font-semibold text-slate-500">作成済みデータ線 ({lines.length})</h2>
+                                </div>
+                                <div className="space-y-2">
+                                {lines.map((line) => (
+                                    <div 
+                                    key={line.id} 
+                                    onClick={() => handleEditLine(line)}
+                                    className={`group border rounded-lg p-3 hover:shadow-sm transition-all flex items-center justify-between cursor-pointer ${editingId === line.id ? 'bg-orange-50 border-orange-300 ring-1 ring-orange-300' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
+                                    >
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-4 flex items-center justify-center bg-slate-50 rounded border border-slate-200">
+                                        <div 
+                                            style={{ 
+                                            width: '80%', 
+                                            height: `${Math.min(line.width, 10)}px`, 
+                                            backgroundColor: line.color,
+                                            borderStyle: line.dashed ? 'dashed' : 'solid',
+                                            borderTopWidth: line.dashed ? 0 : 0
+                                            }}
+                                            className={line.dashed ? "border-t-2 border-transparent border-dashed" : ""}
+                                        >
+                                            {line.dashed && <div style={{width:'100%', height:'2px', borderTop:`${line.width}px dashed ${line.color}`}}></div>}
+                                            {!line.dashed && <div style={{width:'100%', height:`${line.width}px`, backgroundColor: line.color}}></div>}
+                                        </div>
+                                        </div>
+                                        <div>
+                                        <div className="font-medium text-sm text-slate-700">{line.name}</div>
+                                        <div className="text-xs text-slate-500">{line.points.length}点 {line.dashed ? '(点線)' : ''}</div>
+                                        </div>
+                                        {editingId === line.id && <span className="text-[10px] bg-orange-200 text-orange-800 px-1 rounded ml-2">編集中</span>}
+                                    </div>
+                                    <button 
+                                        onClick={(e) => handleDeleteLine(line.id, e)}
+                                        className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                    </div>
+                                ))}
+                                {lines.length === 0 && (
+                                    <div className="text-center py-8 text-slate-400 text-sm">データ線がありません</div>
+                                )}
+                                </div>
+                            </div>
+                            </>
+                        )}
+
+                        {activeTab === 'zones' && (
+                            /* Zones Tab Content */
+                            <>
+                            {/* Add/Edit Zone */}
+                            <div className={`p-4 border-b border-slate-100 ${editingId ? 'bg-orange-50' : 'bg-slate-50'}`}>
+                                <div className="flex items-center justify-between mb-3">
+                                <h2 className={`text-sm font-semibold flex items-center gap-2 ${editingId ? 'text-orange-600' : 'text-slate-500'}`}>
+                                    {editingId ? <RotateCcw size={16} /> : <Plus size={16} />}
+                                    {editingId ? '領域 (Zone) を編集' : '新規領域 (Zone) 作成'}
+                                </h2>
+                                {editingId && (
+                                    <button onClick={handleCancelEdit} className="text-xs text-slate-500 hover:text-slate-800 underline">
+                                    キャンセル
+                                    </button>
+                                )}
+                                </div>
+                                <div className="space-y-3">
+                                <div className="flex flex-col gap-2">
+                                    <input 
+                                    type="text" 
+                                    placeholder="領域名" 
+                                    value={newZone.name}
+                                    onChange={(e) => setNewZone({...newZone, name: e.target.value})}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-indigo-500"
+                                    />
+                                    
+                                    {/* Zone Color Palette */}
+                                    <div>
+                                    <label className="text-xs text-slate-500 block mb-1">塗りつぶし色</label>
+                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                        {PRESET_COLORS.map(c => (
+                                        <button
+                                            key={c}
+                                            onClick={() => setNewZone({...newZone, color: c})}
+                                            className={`w-5 h-5 rounded-full border border-slate-200 transition-transform hover:scale-110 ${newZone.color === c ? 'ring-2 ring-offset-1 ring-indigo-500' : ''}`}
+                                            style={{ backgroundColor: c }}
+                                            title={c}
+                                        />
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2 items-center mb-2">
+                                        <input 
+                                        type="color" 
+                                        value={newZone.color}
+                                        onChange={(e) => setNewZone({...newZone, color: e.target.value})}
+                                        className="w-10 h-10 rounded cursor-pointer border-0 p-0"
+                                        />
+                                        <input 
+                                        type="range" 
+                                        min="0.1" 
+                                        max="1.0" 
+                                        step="0.1" 
+                                        value={newZone.opacity} 
+                                        onChange={(e) => setNewZone({...newZone, opacity: parseFloat(e.target.value)})} 
+                                        className="flex-1"
+                                        title={`不透明度: ${Math.round(newZone.opacity * 100)}%`}
+                                        />
+                                        <span className="text-xs text-slate-500 w-8">{Math.round(newZone.opacity * 100)}%</span>
+                                    </div>
+                                    <label className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-100 border border-slate-200 rounded px-2 py-1.5 cursor-pointer mb-2">
+                                        <input 
+                                            type="checkbox"
+                                            checked={newZone.autoSort}
+                                            onChange={(e) => setNewZone({...newZone, autoSort: e.target.checked})}
+                                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <span>頂点を自動整列（凸多角形）</span>
+                                    </label>
+                                    
+                                    {/* Zone Stroke Settings */}
+                                    <div className="bg-slate-100 border border-slate-200 rounded p-2">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={newZone.showStroke}
+                                                    onChange={(e) => setNewZone({...newZone, showStroke: e.target.checked})}
+                                                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                                                />
+                                                <span>枠線を表示</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={newZone.dashed}
+                                                    disabled={!newZone.showStroke}
+                                                    onChange={(e) => setNewZone({...newZone, dashed: e.target.checked})}
+                                                    className="rounded text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                                                />
+                                                <span>点線</span>
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-slate-500">太さ:</span>
+                                            <input 
+                                                type="range"
+                                                min="1"
+                                                max="8"
+                                                step="0.5"
+                                                value={newZone.strokeWidth}
+                                                disabled={!newZone.showStroke}
+                                                onChange={(e) => setNewZone({...newZone, strokeWidth: parseFloat(e.target.value)})}
+                                                className="flex-1 disabled:opacity-50"
+                                            />
+                                            <span className="text-xs text-slate-500 w-6 text-right">{newZone.strokeWidth}</span>
+                                        </div>
+                                    </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-3 rounded border border-slate-200">
+                                    <h3 className="text-xs font-semibold text-slate-500 mb-2">頂点を追加 ({tempZonePoints.length}点)</h3>
+                                    <div className="grid grid-cols-3 gap-2 mb-2">
+                                    <input 
+                                        type="number" placeholder={labels.a} value={newZonePoint.a}
+                                        onChange={(e) => setNewZonePoint({...newZonePoint, a: e.target.value})}
+                                        className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    <input 
+                                        type="number" placeholder={labels.b} value={newZonePoint.b}
+                                        onChange={(e) => setNewZonePoint({...newZonePoint, b: e.target.value})}
+                                        className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    <input 
+                                        type="number" placeholder={labels.c} value={newZonePoint.c}
+                                        onChange={(e) => setNewZonePoint({...newZonePoint, c: e.target.value})}
+                                        className="px-2 py-1 border border-slate-300 rounded text-sm"
+                                    />
+                                    </div>
+                                    <button 
+                                    onClick={handleAddZonePoint}
+                                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-1 rounded text-xs font-medium transition-colors"
+                                    >
+                                    頂点をリストに追加
+                                    </button>
+
+                                    {/* Temporary Points List (Draggable) */}
+                                    {tempZonePoints.length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                        {tempZonePoints.map((p, idx) => (
+                                        <div 
+                                            key={p.id}
+                                            draggable
+                                            onDragStart={(e) => onDragStart(e, idx)}
+                                            onDragEnter={(e) => onDragEnter(e, idx)}
+                                            onDragEnd={onDragEnd}
+                                            className={`flex justify-between items-center text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded cursor-move hover:bg-slate-100 transition-colors ${draggedIndex === idx ? 'dragging' : ''}`}
+                                        >
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <GripVertical size={12} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">
+                                                    {idx + 1}. A{p.a}, B{p.b}, C{p.c}
+                                                </span>
+                                            </div>
+                                            <button onClick={() => handleRemoveTempZonePoint(p.id)} className="text-slate-400 hover:text-red-500 shrink-0 ml-1"><X size={12}/></button>
+                                        </div>
+                                        ))}
+                                    </div>
+                                    )}
+                                </div>
+
+                                <button 
+                                    onClick={handleAddZone}
+                                    disabled={!newZone.name || tempZonePoints.length < 3}
+                                    className={`w-full text-white py-1.5 px-4 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                                >
+                                    {editingId ? '領域を更新する' : '領域を確定して追加'}
+                                </button>
+                                <p className="text-xs text-slate-400 flex items-center gap-1">
+                                    <Info size={12}/> 3点以上を指定して多角形を作成
+                                </p>
+                                </div>
+                            </div>
+
+                            {/* Zones List */}
+                            <div className="flex-1 p-4 overflow-y-auto">
+                                <div className="flex items-center justify-between mb-2">
+                                <h2 className="text-sm font-semibold text-slate-500">作成済み領域 ({zones.length})</h2>
+                                </div>
+                                <div className="space-y-2">
+                                {zones.map((zone) => (
+                                    <div 
+                                    key={zone.id} 
+                                    onClick={() => handleEditZone(zone)}
+                                    className={`group border rounded-lg p-3 flex items-center justify-between cursor-pointer ${editingId === zone.id ? 'bg-orange-50 border-orange-300 ring-1 ring-orange-300' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
+                                    >
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded border border-slate-300" style={{ backgroundColor: zone.color, opacity: zone.opacity }}></div>
+                                        <div>
+                                        <div className="font-medium text-sm text-slate-700">{zone.name}</div>
+                                        <div className="text-xs text-slate-500">
+                                            {zone.points.length} 頂点
+                                            {zone.autoSort === false && <span className="ml-1 text-indigo-600">(手動)</span>}
+                                        </div>
+                                        </div>
+                                        {editingId === zone.id && <span className="text-[10px] bg-orange-200 text-orange-800 px-1 rounded ml-2">編集中</span>}
+                                    </div>
+                                    <button 
+                                        onClick={(e) => handleDeleteZone(zone.id, e)}
+                                        className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                    </div>
+                                ))}
+                                {zones.length === 0 && (
+                                    <div className="text-center py-8 text-slate-400 text-sm">領域がありません</div>
+                                )}
+                                </div>
+                            </div>
+                            </>
+                        )}
+
+                        {activeTab === 'help' && (
+                            /* Help Tab Content */
+                            <div className="p-5 space-y-6 text-sm text-slate-600">
+                                <div>
+                                    <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                        <MapPin size={16} className="text-indigo-500"/> データ点 (Points)
+                                    </h3>
+                                    <p>3成分の値を入力してプロットします。合計が100でなくても自動計算されます。</p>
+                                </div>
+                                
+                                <div>
+                                    <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                        <TrendingUp size={16} className="text-indigo-500"/> データ線 (Lines)
+                                    </h3>
+                                    <p>2点以上を指定して線を引きます。「点線」や「線の太さ」を変更できます。トレンドラインや境界線に。</p>
+                                </div>
+
+                                <div>
+                                    <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                        <Layers size={16} className="text-indigo-500"/> 領域 (Zones)
+                                    </h3>
+                                    <p>範囲を塗りつぶします。</p>
+                                    <ul className="list-disc list-inside mt-1 ml-1 space-y-1 text-xs">
+                                        <li><strong>編集モード:</strong> グラフ上の領域をクリックすると編集できます。</li>
+                                        <li><strong>頂点移動:</strong> グラフ上の白丸をドラッグして変形。</li>
+                                        <li><strong>頂点追加:</strong> 辺の中央にある半透明の丸をドラッグすると頂点を追加できます。</li>
+                                        <li><strong>自動整列:</strong> チェックを入れるときれいな多角形に、外すと自由な順序で結べます。</li>
+                                    </ul>
+                                </div>
+
+                                <div>
+                                    <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                        <Settings size={16} className="text-indigo-500"/> その他の機能
+                                    </h3>
+                                    <ul className="list-disc list-inside mt-1 ml-1 space-y-1 text-xs">
+                                        <li><strong>軸ラベル変更:</strong> 「データ点」タブの上部で変更可能。</li>
+                                        <li><strong>表示スタイル:</strong> 「データ点」タブ内の設定で、枠線の太さや文字サイズ、グリッド線の有無を変更できます。</li>
+                                        <li><strong>画像保存:</strong> 右上のボタンでコピー（背景透過）や保存ができます。</li>
+                                    </ul>
+                                </div>
+                                
+                                <div className="pt-4 border-t border-slate-200 text-xs text-center">
+                                    <p>Phase Diagram Maker v1.0</p>
+                                    <p className="mt-1">著作権: persona laboratory</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-2 text-center text-xs text-slate-400 bg-slate-50 border-t border-slate-200">
+                        著作権: persona laboratory
+                    </div>
+
+                    </div>
+
+                    {/* Right Panel: Graph */}
+                    <div className="flex-1 bg-slate-100 flex items-center justify-center p-1 overflow-hidden relative">
+                    <div className="bg-white rounded-lg shadow-lg w-full h-full flex items-center justify-center overflow-hidden">
+                        <svg 
+                        ref={svgRef}
+                        viewBox={`-${padding} -${padding} ${size + padding * 2} ${height + padding * 2}`} 
+                        className="w-full h-full select-none"
+                        style={{ fontFamily: '"Meiryo UI", sans-serif', maxHeight: '100%', maxWidth: '100%' }}
+                        onMouseMove={handleSvgMouseMove}
+                        onMouseUp={handleSvgMouseUp}
+                        onMouseLeave={handleSvgMouseUp}
+                        >
+                        {/* 三角形の外枠と塗りつぶし */}
+                        <polygon 
+                            points={`${vertexA.x},${vertexA.y} ${vertexB.x},${vertexB.y} ${vertexC.x},${vertexC.y}`} 
+                            fill="white" 
+                            stroke="#334155" 
+                            strokeWidth={visualSettings.frameWidth}
+                        />
+
+                        {/* ゾーン（領域）の描画 - グリッドの後、点の前 */}
+                        {visualSettings.showGrid && <GridLines />}
+
+                        {/* --- 編集中のゾーン プレビュー --- */}
+                        {activeTab === 'zones' && tempZonePoints.length > 0 && (
+                            <g>
+                                {/* 塗りつぶしプレビュー（3点以上） */}
+                                {tempZonePoints.length >= 3 && (
+                                    <polygon 
+                                        points={(newZone.autoSort ? getSortedZonePoints(tempZonePoints) : tempZonePoints).map(p => {
+                                            const c = getCoordinates(p.a, p.b, p.c);
+                                            return `${c.x},${c.y}`;
+                                        }).join(' ')}
+                                        fill={newZone.color}
+                                        fillOpacity={newZone.opacity}
+                                        stroke={newZone.showStroke ? newZone.color : "none"}
+                                        strokeWidth={newZone.strokeWidth}
+                                        strokeDasharray={newZone.dashed ? "6 4" : "none"}
+                                        pointerEvents="none"
+                                    />
+                                )}
+                                {/* 頂点と線のプレビュー（接続線） */}
+                                <polyline
+                                    // 閉じる線を描画するために、始点を末尾に追加するような文字列を生成
+                                    points={
+                                        (function(){
+                                            const pts = newZone.autoSort ? getSortedZonePoints(tempZonePoints) : tempZonePoints;
+                                            const coords = pts.map(p => getCoordinates(p.a, p.b, p.c));
+                                            let s = coords.map(c => `${c.x},${c.y}`).join(' ');
+                                            if (coords.length >= 3) {
+                                                s += ` ${coords[0].x},${coords[0].y}`; // 閉じる
+                                            }
+                                            return s;
+                                        })()
+                                    }
+                                    fill="none"
+                                    stroke={newZone.color}
+                                    strokeWidth="1"
+                                    strokeDasharray="2 2"
+                                    pointerEvents="none"
+                                />
+                                
+                                {/* 辺の中点ハンドル (クリック/ドラッグで頂点追加) */}
+                                {tempZonePoints.length >= 2 && (function(){
+                                    const pts = newZone.autoSort ? getSortedZonePoints(tempZonePoints) : tempZonePoints;
+                                    const handles = [];
+                                    const len = pts.length;
+                                    // 3点以上なら多角形として閉じるので、最後の点と最初の点の間も処理
+                                    const limit = (len >= 3) ? len : len - 1;
+
+                                    for (let i = 0; i < limit; i++) {
+                                        const p1 = pts[i];
+                                        const p2 = pts[(i + 1) % len];
+                                        
+                                        const c1 = getCoordinates(p1.a, p1.b, p1.c);
+                                        const c2 = getCoordinates(p2.a, p2.b, p2.c);
+                                        
+                                        const midX = (c1.x + c2.x) / 2;
+                                        const midY = (c1.y + c2.y) / 2;
+                                        
+                                        // 挿入すべき元配列のインデックスを特定
+                                        // autoSort: true の場合は末尾に追加するだけなので index はあまり関係ないが、
+                                        // autoSort: false の場合は p1 の originalIndex の次に追加したい。
+                                        // 新規追加中で originalIndex がない場合は今の配列順 (i) を使う
+                                        const insertIndex = (p1.originalIndex !== undefined) ? p1.originalIndex : i;
+
+                                        handles.push(
+                                            <g key={`edge-${i}`} className="group cursor-copy" onMouseDown={(e) => handleGraphAddVertex(e, insertIndex)}>
+                                                <circle 
+                                                    cx={midX} cy={midY} r="6" 
+                                                    fill="white" stroke={newZone.color} strokeWidth="1" 
+                                                    className="edge-handle"
+                                                />
+                                                <line x1={midX-3} y1={midY} x2={midX+3} y2={midY} stroke={newZone.color} strokeWidth="2" className="edge-handle pointer-events-none" />
+                                                <line x1={midX} y1={midY-3} x2={midX} y2={midY+3} stroke={newZone.color} strokeWidth="2" className="edge-handle pointer-events-none" />
+                                            </g>
+                                        );
+                                    }
+                                    return handles;
+                                })()}
+
+                                {/* 頂点マーカー (ドラッグ可能) */}
+                                {tempZonePoints.map((p, i) => {
+                                    const c = getCoordinates(p.a, p.b, p.c);
+                                    return (
+                                        <circle 
+                                            key={i} 
+                                            cx={c.x} 
+                                            cy={c.y} 
+                                            r={graphDragIndex === i ? 8 : 6} 
+                                            fill="white" 
+                                            stroke={newZone.color} 
+                                            strokeWidth="3"
+                                            className="cursor-grab hover:r-8 transition-all"
+                                            onMouseDown={(e) => handleGraphDragStart(i, e)}
+                                        />
+                                    );
+                                })}
+                            </g>
+                        )}
+
+                        {/* 領域 */}
+                        {zones.map((zone) => {
+                            // 編集中のものは非表示にする（プレビューが表示されるため）
+                            if (editingId === zone.id) return null;
+
+                            // autoSortがundefinedの場合はtrue（互換性）、明示的にfalseならそのまま
+                            const ptsToRender = (zone.autoSort !== false) ? getSortedZonePoints(zone.points) : zone.points;
+                            const pointsString = ptsToRender.map(p => {
+                                const c = getCoordinates(p.a, p.b, p.c);
+                                return `${c.x},${c.y}`;
+                            }).join(' ');
+
+                            return (
+                            <polygon 
+                                key={zone.id}
+                                points={pointsString}
+                                fill={zone.color}
+                                fillOpacity={zone.opacity}
+                                stroke={zone.showStroke !== false ? zone.color : "none"}
+                                strokeWidth={zone.strokeWidth || 2}
+                                strokeDasharray={zone.dashed ? "6 4" : "none"}
+                                className="transition-all hover:stroke-2 hover:stroke-black cursor-pointer"
+                                onClick={(e) => { e.stopPropagation(); handleEditZone(zone); }}
+                            >
+                                <title>{zone.name} (クリックして編集)</title>
+                            </polygon>
+                            );
+                        })}
+
+                        {/* --- 編集中のライン プレビュー --- */}
+                        {activeTab === 'lines' && tempLinePoints.length > 0 && (
+                            <g>
+                                <polyline 
+                                    points={tempLinePoints.map(p => {
+                                        const c = getCoordinates(p.a, p.b, p.c);
+                                        return `${c.x},${c.y}`;
+                                    }).join(' ')}
+                                    fill="none"
+                                    stroke={newLine.color}
+                                    strokeWidth={newLine.width}
+                                    strokeDasharray={newLine.dashed ? "6 4" : "none"}
+                                    opacity="0.7"
+                                    pointerEvents="none"
+                                />
+
+                                {/* 辺の中点ハンドル (クリック/ドラッグで頂点追加) - 線の場合 */}
+                                {tempLinePoints.length >= 2 && (function(){
+                                    const pts = tempLinePoints;
+                                    const handles = [];
+                                    // 線は閉じないので len - 1 まで
+                                    for (let i = 0; i < pts.length - 1; i++) {
+                                        const p1 = pts[i];
+                                        const p2 = pts[i + 1];
+                                        
+                                        const c1 = getCoordinates(p1.a, p1.b, p1.c);
+                                        const c2 = getCoordinates(p2.a, p2.b, p2.c);
+                                        
+                                        const midX = (c1.x + c2.x) / 2;
+                                        const midY = (c1.y + c2.y) / 2;
+                                        
+                                        handles.push(
+                                            <g key={`line-edge-${i}`} className="group cursor-copy" onMouseDown={(e) => handleGraphAddVertex(e, i)}>
+                                                <circle 
+                                                    cx={midX} cy={midY} r="6" 
+                                                    fill="white" stroke={newLine.color} strokeWidth="1" 
+                                                    className="edge-handle"
+                                                />
+                                                <line x1={midX-3} y1={midY} x2={midX+3} y2={midY} stroke={newLine.color} strokeWidth="2" className="edge-handle pointer-events-none" />
+                                                <line x1={midX} y1={midY-3} x2={midX} y2={midY+3} stroke={newLine.color} strokeWidth="2" className="edge-handle pointer-events-none" />
+                                            </g>
+                                        );
+                                    }
+                                    return handles;
+                                })()}
+
+                                {/* 頂点マーカー */}
+                                {tempLinePoints.map((p, i) => {
+                                    const c = getCoordinates(p.a, p.b, p.c);
+                                    return (
+                                        <circle 
+                                            key={i} 
+                                            cx={c.x} 
+                                            cy={c.y} 
+                                            r={graphDragIndex === i ? 8 : 6} 
+                                            fill={newLine.color} 
+                                            stroke="white" 
+                                            strokeWidth="2"
+                                            className="cursor-grab hover:r-8 transition-all"
+                                            onMouseDown={(e) => handleGraphDragStart(i, e)}
+                                        />
+                                    );
+                                })}
+                            </g>
+                        )}
+
+                        {/* データ線 (Line) */}
+                        {lines.map((line) => {
+                            if (editingId === line.id) return null;
+
+                            const pointsString = line.points.map(p => {
+                            const c = getCoordinates(p.a, p.b, p.c);
+                            return `${c.x},${c.y}`;
+                            }).join(' ');
+
+                            return (
+                            <g key={line.id} onClick={(e) => { e.stopPropagation(); handleEditLine(line); }} className="cursor-pointer group">
+                                <polyline 
+                                    points={pointsString}
+                                    fill="none"
+                                    stroke={line.color}
+                                    strokeWidth={line.width}
+                                    strokeDasharray={line.dashed ? "6 4" : "none"}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="transition-all group-hover:stroke-[4px]"
+                                >
+                                    <title>{line.name}</title>
+                                </polyline>
+                                {/* ヒットエリア拡張用の透明な線 */}
+                                <polyline 
+                                    points={pointsString}
+                                    fill="none"
+                                    stroke="transparent"
+                                    strokeWidth="10"
+                                />
+                            </g>
+                            );
+                        })}
+
+                        {/* 軸のラベル */}
+                        <text x={vertexA.x} y={vertexA.y - 20} textAnchor="middle" fontSize={visualSettings.fontSize} className="font-bold fill-slate-700 pointer-events-none">{labels.a}</text>
+                        <text x={vertexB.x - 20} y={vertexB.y + 20} textAnchor="end" fontSize={visualSettings.fontSize} className="font-bold fill-slate-700 pointer-events-none">{labels.b}</text>
+                        <text x={vertexC.x + 20} y={vertexC.y + 20} textAnchor="start" fontSize={visualSettings.fontSize} className="font-bold fill-slate-700 pointer-events-none">{labels.c}</text>
+
+                        {/* プロットされた点 */}
+                        {points.map((point) => {
+                            const coords = getCoordinates(point.a, point.b, point.c);
+                            const isHovered = hoveredPoint === point.id;
+
+                            // 編集中の点は特別扱いしない（ドラッグ機能未実装のため）が、将来的に追加可能
+                            return (
+                            <g key={point.id} 
+                                onMouseEnter={() => setHoveredPoint(point.id)}
+                                onMouseLeave={() => setHoveredPoint(null)}
+                                style={{ cursor: 'pointer' }}
+                                onClick={(e) => { e.stopPropagation(); handleEditPoint(point); }}
+                            >
+                                {/* ホバー時の補助線 */}
+                                {isHovered && (
+                                <>
+                                    <line x1={coords.x} y1={coords.y} x2={coords.x + 1000} y2={coords.y} stroke={point.color} strokeWidth="1" strokeDasharray="4" opacity="0.3" clipPath="url(#triangle-clip)" pointerEvents="none" />
+                                    <line x1={coords.x} y1={coords.y} x2={coords.x - 1000} y2={coords.y + 1732} stroke={point.color} strokeWidth="1" strokeDasharray="4" opacity="0.3" clipPath="url(#triangle-clip)" pointerEvents="none" />
+                                    <line x1={coords.x} y1={coords.y} x2={coords.x - 1000} y2={coords.y - 1732} stroke={point.color} strokeWidth="1" strokeDasharray="4" opacity="0.3" clipPath="url(#triangle-clip)" pointerEvents="none" />
+                                </>
+                                )}
+
+                                {/* 点本体 */}
+                                <circle 
+                                    cx={coords.x} 
+                                    cy={coords.y} 
+                                    r={isHovered ? 8 : 5} 
+                                    fill={point.color} 
+                                    stroke="white" 
+                                    strokeWidth="2"
+                                    className="transition-all duration-200 ease-out"
+                                />
+
+                                {/* ホバー時のツールチップ */}
+                                {isHovered && (
+                                <g pointerEvents="none">
+                                    {(() => {
+                                        const txtName = point.name;
+                                        const txtA = `${labels.a}: ${Math.round(coords.fa * 100)}%`;
+                                        const txtB = `${labels.b}: ${Math.round(coords.fb * 100)}%`;
+                                        const txtC = `${labels.c}: ${Math.round(coords.fc * 100)}%`;
+                                        
+                                        const maxLen = Math.max(
+                                            txtName.length * 1.2, 
+                                            txtA.length, 
+                                            txtB.length, 
+                                            txtC.length
+                                        );
+                                        const width = Math.max(120, maxLen * 10 + 30);
+                                        const height = 85;
+
+                                        return (
+                                            <g>
+                                                <rect 
+                                                    x={coords.x + 10} 
+                                                    y={coords.y - height / 2} 
+                                                    width={width} 
+                                                    height={height} 
+                                                    rx="4" 
+                                                    fill="rgba(30, 41, 59, 0.95)" 
+                                                    // filter="drop-shadow(0 4px 6px rgba(0,0,0,0.1))" // SVG filter is complex, simple fill for now
+                                                />
+                                                <text x={coords.x + 20} y={coords.y - height / 2 + 20} className="text-xs fill-white font-bold">{txtName}</text>
+                                                <text x={coords.x + 20} y={coords.y - height / 2 + 40} className="text-[11px] fill-slate-300">{txtA}</text>
+                                                <text x={coords.x + 20} y={coords.y - height / 2 + 55} className="text-[11px] fill-slate-300">{txtB}</text>
+                                                <text x={coords.x + 20} y={coords.y - height / 2 + 70} className="text-[11px] fill-slate-300">{txtC}</text>
+                                            </g>
+                                        );
+                                    })()}
+                                </g>
+                                )}
+                            </g>
+                            );
+                        })}
+
+                        {/* クリッピング定義 */}
+                        <defs>
+                            <clipPath id="triangle-clip">
+                            <polygon points={`${vertexA.x},${vertexA.y} ${vertexB.x},${vertexB.y} ${vertexC.x},${vertexC.y}`} />
+                            </clipPath>
+                        </defs>
+                        </svg>
+                    </div>
+                    
+                    <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur px-3 py-2 rounded text-xs text-slate-500 shadow-sm border border-slate-200">
+                        {points.length} 点 / {lines.length} 線 / {zones.length} 領域
+                    </div>
+                    </div>
+                </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TernaryPlotMaker />);
+    </script>
+</body>
+</html>
