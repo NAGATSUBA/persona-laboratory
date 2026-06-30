@@ -121,7 +121,10 @@
                             表示をカスタマイズしたい場合は、右上の「編集モード」に切り替えてください（このブラウザのみに保存されます）。
                         </p>
                     </div>
-                    <div id="portal-edit-btn-container" class="hidden relative z-20">
+                    <div id="portal-edit-btn-container" class="hidden relative z-20 flex gap-2">
+                        <button onclick="exportConfig()" class="bg-black/60 hover:bg-green-600 text-gray-200 p-2.5 rounded-lg border border-gray-600 backdrop-blur-md transition-all shadow-lg" title="設定をJSONファイルに書き出し（Claude Codeに送って恒久反映させる用）">
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                        </button>
                         <button onclick="openGlobalEdit()" class="bg-black/60 hover:bg-pink-600 text-gray-200 p-2.5 rounded-lg border border-gray-600 backdrop-blur-md transition-all shadow-lg" title="ポータル設定（背景画像など）を変更">
                             <i data-lucide="settings" class="w-5 h-5"></i>
                         </button>
@@ -705,6 +708,20 @@
                 const desc = card.querySelector('p').textContent.toLowerCase();
                 card.style.display = (title.includes(lowerQuery) || desc.includes(lowerQuery)) ? '' : 'none';
             });
+        }
+
+        function exportConfig() {
+            const data = {
+                portalSettings: portalSettings,
+                projects: currentProjects
+            };
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'persona-lab-config.json';
+            a.click();
+            URL.revokeObjectURL(a.href);
         }
 
         function escapeHtml(unsafe) {
