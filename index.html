@@ -466,7 +466,15 @@
 
         function renderUI() {
             updateHeaderModeUI();
-            if (currentProjects.length === 0) currentProjects = initAndLoadData();
+            if (currentProjects.length === 0) {
+                currentProjects = initAndLoadData();
+                // ページ初回読み込み時にポータル設定をlocalStorageから復元する
+                const settingsStr = localStorage.getItem(STORAGE_KEY_SETTINGS);
+                if (settingsStr) {
+                    try { portalSettings = { ...defaultPortalSettings, ...JSON.parse(settingsStr) }; }
+                    catch(e) { console.warn('Portal settings parse error', e); }
+                }
+            }
             renderPortalHeader();
 
             const grid = document.getElementById('projects-grid');
