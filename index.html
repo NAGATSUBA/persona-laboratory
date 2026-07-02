@@ -386,7 +386,7 @@
                         ...config,
                         title: ov.title || config.title,
                         desc: ov.desc || config.desc,
-                        thumbnail: ov.thumbnail || '',
+                        thumbnail: ov.thumbnail || config.thumbnail || '',
                         code: ov.code || null,
                         isEdited: !!ov.code
                     };
@@ -395,7 +395,7 @@
                 const customs = savedProjects.filter(p => !defaultConfigs.some(c => c.id === p.id));
                 projects = projects.concat(customs);
             } else {
-                projects = defaultConfigs.map(config => ({ ...config, thumbnail: '', code: null, isEdited: false }));
+                projects = defaultConfigs.map(config => ({ ...config, thumbnail: config.thumbnail || '', code: null, isEdited: false }));
             }
             return projects;
         }
@@ -460,7 +460,7 @@
             if (index === -1) return;
             const defaultConfig = defaultConfigs.find(c => c.id === appId);
             if (defaultConfig) {
-                currentProjects[index] = { ...defaultConfig, thumbnail: '', code: null, isEdited: false };
+                currentProjects[index] = { ...defaultConfig, thumbnail: defaultConfig.thumbnail || '', code: null, isEdited: false };
             } else {
                 currentProjects.splice(index, 1);
             }
